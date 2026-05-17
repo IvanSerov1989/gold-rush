@@ -8,8 +8,22 @@
 </head>
 <body>
     <div id="game-container">
-        <h1>Арена-Лабиринт: Золотая Лихорадка</h1>
-        <div id="game-board"></div>
+      <h1>Золотая Лихорадка</h1>
+
+      <div id="join-screen">
+          <input type="text" id="username-input" placeholder="Введите никнейм" maxlength="15">
+          <button id="join-btn">Присоединиться</button>
+          <p id="error-message" style="color: #ff6b6b; display: none;"></p>
+      </div>
+
+      <div id="lobby-screen" style="display: none;">
+          <h2>Лобби ожидания (<span id="players-count">0</span>/4)</h2>
+          <ul id="players-list"></ul>
+          <button id="start-game-btn" style="display: none;">Начать игру</button>
+          <p id="waiting-message">Ожидаем лидера для старта...</p>
+      </div>
+
+      <div id="game-board" style="display: none;"></div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
