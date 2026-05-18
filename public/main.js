@@ -19,6 +19,7 @@ let resourceElements = {};
 let projectileElements = {};
 let currentGameState = null;
 let animationFrame = null;
+let playerRenderData = {}; // Интерполяция позиций игроков между обновлениями
 
 // ==================== УПРАВЛЕНИЕ КЛАВИАТУРОЙ ====================
 const keys = {};                    // Текущее состояние клавиш
@@ -109,11 +110,52 @@ socket.on('game_started', () => {
 function startClientGameLoop() {
     // Слушаем обновления от сервера
     socket.on('game_state_update', (state) => {
+        const now = performance.now();
+
+        if (state.players) {
+            Object.keys(state.players).forEach(id => {
+                const p = state.players[id];
+                const prev = playerRenderData[id];
+
+                if (prev && prev.nextTime) {
+                    playerRenderData[id] = {
+                        ...prev,
+                        prevX: prev.nextX,
+                        prevY: prev.nextY,
+                        prevTime: prev.nextTime,
+                        nextX: p.x,
+                        nextY: p.y,
+                        nextTime: now,
+                        color: p.color,
+                        name: p.name
+                    };
+                } else {
+                    playerRenderData[id] = {
+                        prevX: p.x,
+                        prevY: p.y,
+                        nextX: p.x,
+                        nextY: p.y,
+                        prevTime: now - 33,
+                        nextTime: now,
+                        color: p.color,
+                        name: p.name
+                    };
+                }
+            });
+
+            Object.keys(playerRenderData).forEach(id => {
+                if (!state.players[id]) {
+                    delete playerRenderData[id];
+                }
+            });
+        }
+
         currentGameState = state;
     });
 
     // Главный цикл рендеринга
-    function gameLoop() {
+    function gameLoop(timestamp) {
+        const now = timestamp || performance.now();
         if (!currentGameState || !currentGameState.players) {
             animationFrame = requestAnimationFrame(gameLoop);
             return;
@@ -141,9 +183,20 @@ function startClientGameLoop() {
                 playerElements[id] = playerDiv;
             }
 
-            // Плавное обновление позиции через transform (самое важное!)
+            const renderInfo = playerRenderData[id];
+            let x = p.x;
+            let y = p.y;
+
+            if (renderInfo) {
+                const interval = Math.max(16, renderInfo.nextTime - renderInfo.prevTime);
+                let t = (now - renderInfo.prevTime) / interval;
+                t = Math.min(1, Math.max(0, t));
+                x = renderInfo.prevX + (renderInfo.nextX - renderInfo.prevX) * t;
+                y = renderInfo.prevY + (renderInfo.nextY - renderInfo.prevY) * t;
+            }
+
             const el = playerElements[id];
-            el.style.transform = `translate3d(${p.x - 20}px, ${p.y - 20}px, 0)`;
+            el.style.transform = `translate3d(${x - 20}px, ${y - 20}px, 0)`;
         });
 
         // Создаём/обновляем DOM-элементы препятствий (obstacles)
