@@ -4,26 +4,23 @@ const socket = io();
 const joinScreen = document.getElementById('join-screen');
 const lobbyScreen = document.getElementById('lobby-screen');
 const gameBoard = document.getElementById('game-board');
-
 const usernameInput = document.getElementById('username-input');
 const joinBtn = document.getElementById('join-btn');
 const errorMessage = document.getElementById('error-message');
-
 const playersList = document.getElementById('players-list');
 const playersCount = document.getElementById('players-count');
 const startGameBtn = document.getElementById('start-game-btn');
 const waitingMessage = document.getElementById('waiting-message');
 
 let myPlayerInfo = null;
+let playerElements = {};   // { socketId: DOM-элемент }
+let currentGameState = null;
+let animationFrame = null;
 
-// --- ОТПРАВКА ДАННЫХ НА СЕРВЕР ---
-
+// ==================== ЛОББИ ====================
 joinBtn.addEventListener('click', () => {
     const username = usernameInput.value.trim();
-    if (username.length < 2) {
-        showError('Имя должно быть не короче 2 символов');
-        return;
-    }
+    if (username.length < 2) return showError('Имя минимум 2 символа');
     socket.emit('join_game', username);
 });
 
@@ -31,21 +28,14 @@ startGameBtn.addEventListener('click', () => {
     socket.emit('start_game');
 });
 
-// --- ОБРАБОТКА ОТВЕТОВ ОТ СЕРВЕРА ---
+socket.on('join_error', showError);
 
-// Ошибка при входе
-socket.on('join_error', (message) => {
-    showError(message);
-});
-
-// Успешный вход
 socket.on('join_success', (playerInfo) => {
     myPlayerInfo = playerInfo;
     joinScreen.style.display = 'none';
     lobbyScreen.style.display = 'block';
 });
 
-// Обновление списка лобби
 socket.on('update_lobby', (players) => {
     playersList.innerHTML = '';
     playersCount.textContent = players.length;
@@ -59,36 +49,81 @@ socket.on('update_lobby', (players) => {
             badge.className = 'leader-badge';
             li.appendChild(badge);
         }
-        // Выделяем себя в списке
-        if (player.id === socket.id) {
-            li.style.fontWeight = 'bold';
-        }
+        if (player.id === socket.id) li.style.fontWeight = 'bold';
         playersList.appendChild(li);
     });
 
-    // Показываем кнопку старта ТОЛЬКО лидеру, если игроков >= 2
-    // (Для теста можно поменять players.length >= 2 на >= 1, чтобы запустить одному)
     const amILeader = players.find(p => p.id === socket.id)?.isLeader;
     if (amILeader) {
         waitingMessage.style.display = 'none';
         startGameBtn.style.display = players.length >= 2 ? 'inline-block' : 'none';
-        if (players.length < 2) {
-             waitingMessage.style.display = 'block';
-             waitingMessage.textContent = 'Ждем других игроков...';
-        }
     } else {
         startGameBtn.style.display = 'none';
         waitingMessage.style.display = 'block';
-        waitingMessage.textContent = 'Ожидаем лидера для старта...';
     }
 });
 
-// Старт игры
+// ==================== СТАРТ ИГРЫ ====================
 socket.on('game_started', () => {
     lobbyScreen.style.display = 'none';
-    gameBoard.style.display = 'block'; // Показываем игровое поле
-    console.log('Игра началась! Переход к игровому циклу.');
+    gameBoard.style.display = 'block';
+    
+    // Запускаем клиентский игровой цикл
+    startClientGameLoop();
 });
+
+// ==================== ИГРОВОЙ ЦИКЛ КЛИЕНТА (60 FPS) ====================
+function startClientGameLoop() {
+    // Слушаем обновления от сервера
+    socket.on('game_state_update', (state) => {
+        currentGameState = state;
+    });
+
+    // Главный цикл рендеринга
+    function gameLoop() {
+        if (!currentGameState || !currentGameState.players) {
+            animationFrame = requestAnimationFrame(gameLoop);
+            return;
+        }
+
+        // Создаём/обновляем DOM-элементы игроков
+        Object.keys(currentGameState.players).forEach(id => {
+            const p = currentGameState.players[id];
+            
+            if (!playerElements[id]) {
+                // Создаём нового игрока
+                const playerDiv = document.createElement('div');
+                playerDiv.className = 'player';
+                playerDiv.style.backgroundColor = p.color;
+                
+                // Имя над игроком
+                const nameDiv = document.createElement('div');
+                nameDiv.className = 'player-name';
+                nameDiv.textContent = p.name;
+                playerDiv.appendChild(nameDiv);
+                
+                gameBoard.appendChild(playerDiv);
+                playerElements[id] = playerDiv;
+            }
+
+            // Плавное обновление позиции через transform (самое важное!)
+            const el = playerElements[id];
+            el.style.transform = `translate3d(${p.x - 20}px, ${p.y - 20}px, 0)`;
+        });
+
+        // Удаляем игроков, которые вышли
+        Object.keys(playerElements).forEach(id => {
+            if (!currentGameState.players[id]) {
+                playerElements[id].remove();
+                delete playerElements[id];
+            }
+        });
+
+        animationFrame = requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop(); // Запуск цикла
+}
 
 // Вспомогательная функция
 function showError(msg) {
