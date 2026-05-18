@@ -17,6 +17,36 @@ let playerElements = {};   // { socketId: DOM-элемент }
 let currentGameState = null;
 let animationFrame = null;
 
+// ==================== УПРАВЛЕНИЕ КЛАВИАТУРОЙ ====================
+const keys = {};                    // Текущее состояние клавиш
+const SPEED = 5;                    // Скорость движения (пикселей за тик)
+
+// Отслеживаем нажатие и отпускание клавиш
+window.addEventListener('keydown', (e) => {
+    keys[e.key.toLowerCase()] = true;
+});
+
+window.addEventListener('keyup', (e) => {
+    keys[e.key.toLowerCase()] = false;
+});
+
+// Функция, которая отправляет текущее состояние клавиш на сервер
+function sendInput() {
+    if (!currentGameState || !myPlayerInfo) return;
+
+    const input = {
+        up:    keys['w'] || keys['arrowup'],
+        down:  keys['s'] || keys['arrowdown'],
+        left:  keys['a'] || keys['arrowleft'],
+        right: keys['d'] || keys['arrowright']
+    };
+
+    // Отправляем только если есть движение
+    if (input.up || input.down || input.left || input.right) {
+        socket.emit('player_input', input);
+    }
+}
+
 // ==================== ЛОББИ ====================
 joinBtn.addEventListener('click', () => {
     const username = usernameInput.value.trim();
@@ -85,6 +115,8 @@ function startClientGameLoop() {
             animationFrame = requestAnimationFrame(gameLoop);
             return;
         }
+
+        sendInput();
 
         // Создаём/обновляем DOM-элементы игроков
         Object.keys(currentGameState.players).forEach(id => {
