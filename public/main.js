@@ -14,6 +14,9 @@ const waitingMessage = document.getElementById('waiting-message');
 
 let myPlayerInfo = null;
 let playerElements = {};   // { socketId: DOM-элемент }
+let obstacleElements = {}; // { id: DOM-element }
+let resourceElements = {};
+let projectileElements = {};
 let currentGameState = null;
 let animationFrame = null;
 
@@ -143,11 +146,88 @@ function startClientGameLoop() {
             el.style.transform = `translate3d(${p.x - 20}px, ${p.y - 20}px, 0)`;
         });
 
+        // Создаём/обновляем DOM-элементы препятствий (obstacles)
+        if (currentGameState.obstacles) {
+            currentGameState.obstacles.forEach(obs => {
+                if (!obstacleElements[obs.id]) {
+                    const d = document.createElement('div');
+                    d.className = 'obstacle';
+                    d.style.backgroundColor = obs.color || '#7f8c8d';
+                    gameBoard.appendChild(d);
+                    obstacleElements[obs.id] = d;
+                }
+                const el = obstacleElements[obs.id];
+                // obstacles are typically rectangular
+                el.style.width = (obs.width || 40) + 'px';
+                el.style.height = (obs.height || 40) + 'px';
+                el.style.transform = `translate3d(${obs.x - (obs.width||40)/2}px, ${obs.y - (obs.height||40)/2}px, 0)`;
+            });
+        }
+
+        // Ресурсы (например, золото, health)
+        if (currentGameState.resources) {
+            currentGameState.resources.forEach(res => {
+                if (!resourceElements[res.id]) {
+                    const d = document.createElement('div');
+                    d.className = 'resource';
+                    d.title = res.type || 'resource';
+                    gameBoard.appendChild(d);
+                    resourceElements[res.id] = d;
+                }
+                const el = resourceElements[res.id];
+                const size = res.size || 14;
+                el.style.width = size + 'px';
+                el.style.height = size + 'px';
+                el.style.backgroundColor = res.color || '#f1c40f';
+                el.style.transform = `translate3d(${res.x - size/2}px, ${res.y - size/2}px, 0)`;
+            });
+        }
+
+        // Снаряды / проектайлы
+        if (currentGameState.projectiles) {
+            currentGameState.projectiles.forEach(pr => {
+                if (!projectileElements[pr.id]) {
+                    const d = document.createElement('div');
+                    d.className = 'projectile';
+                    gameBoard.appendChild(d);
+                    projectileElements[pr.id] = d;
+                }
+                const el = projectileElements[pr.id];
+                const size = pr.size || 8;
+                el.style.width = size + 'px';
+                el.style.height = size + 'px';
+                el.style.backgroundColor = pr.color || '#ecf0f1';
+                el.style.transform = `translate3d(${pr.x - size/2}px, ${pr.y - size/2}px, 0)`;
+            });
+        }
+
         // Удаляем игроков, которые вышли
         Object.keys(playerElements).forEach(id => {
             if (!currentGameState.players[id]) {
                 playerElements[id].remove();
                 delete playerElements[id];
+            }
+        });
+
+        // Удаляем препятствия, ресурсы и снаряды, которые исчезли
+        Object.keys(obstacleElements).forEach(id => {
+            if (!currentGameState.obstacles || !currentGameState.obstacles.find(o => o.id === id)) {
+                obstacleElements[id].remove();
+                delete obstacleElements[id];
+            }
+        });
+
+        Object.keys(resourceElements).forEach(id => {
+            if (!currentGameState.resources || !currentGameState.resources.find(r => r.id === id)) {
+                resourceElements[id].remove();
+                delete resourceElements[id];
+            }
+        });
+
+        Object.keys(projectileElements).forEach(id => {
+            if (!currentGameState.projectiles || !currentGameState.projectiles.find(p => p.id === id)) {
+                projectileElements[id].remove();
+                delete projectileElements[id];
             }
         });
 
