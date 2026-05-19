@@ -29,7 +29,7 @@ let gameInProgress = false;
 let gameInterval = null;
 let resourceSpawnInterval = null;
 
-// Статичные препятствия (стены/камни)
+// Статичные препятствия
 const OBSTACLES = [
     { id: 'obs1', x: 200, y: 150, width: 80, height: 30, color: '#7f8c8d' },
     { id: 'obs2', x: 600, y: 150, width: 80, height: 30, color: '#7f8c8d' },
@@ -100,7 +100,7 @@ function checkCollisions() {
         const player = gameState.players[playerId];
         if (!player) return;
 
-        // 1. Столкновение с препятствиями (отталкивание)
+        // Столкновение с препятствиями
         OBSTACLES.forEach(obs => {
             const halfW = (obs.width || 40) / 2;
             const halfH = (obs.height || 40) / 2;
@@ -118,13 +118,12 @@ function checkCollisions() {
                 player.x += (dx / dist) * overlap * 1.1;
                 player.y += (dy / dist) * overlap * 1.1;
 
-                // Ограничение границ
                 player.x = Math.max(PLAYER_RADIUS, Math.min(BOARD_WIDTH - PLAYER_RADIUS, player.x));
                 player.y = Math.max(PLAYER_RADIUS, Math.min(BOARD_HEIGHT - PLAYER_RADIUS, player.y));
             }
         });
 
-        // 2. Сбор ресурсов
+        // Сбор ресурсов
         for (let i = gameState.resources.length - 1; i >= 0; i--) {
             const res = gameState.resources[i];
             const dx = player.x - res.x;
@@ -132,11 +131,8 @@ function checkCollisions() {
             const dist = Math.sqrt(dx * dx + dy * dy);
 
             if (dist < PLAYER_RADIUS + res.size / 2) {
-                // Собираем!
                 player.score = (player.score || 0) + RESOURCE_VALUE;
                 gameState.resources.splice(i, 1);
-
-                // Спавним новый ресурс
                 setTimeout(spawnResource, 800);
             }
         }
@@ -186,11 +182,12 @@ io.on('connection', (socket) => {
                 x: startPositions[i].x,
                 y: startPositions[i].y,
                 score: 0,
-                color: PLAYER_COLORS[i % PLAYER_COLORS.length]
+                color: PLAYER_COLORS[i % PLAYER_COLORS.length],
+                vx: 0,
+                vy: 0
             };
         });
 
-        // Спавним начальные ресурсы
         for (let i = 0; i < 6; i++) {
             spawnResource();
         }
@@ -217,10 +214,14 @@ io.on('connection', (socket) => {
 
             player.x += dx;
             player.y += dy;
+            player.vx = dx;
+            player.vy = dy;
 
-            // Ограничение границ
             player.x = Math.max(PLAYER_RADIUS, Math.min(BOARD_WIDTH - PLAYER_RADIUS, player.x));
             player.y = Math.max(PLAYER_RADIUS, Math.min(BOARD_HEIGHT - PLAYER_RADIUS, player.y));
+        } else {
+            player.vx = 0;
+            player.vy = 0;
         }
     });
 
@@ -247,7 +248,17 @@ io.on('connection', (socket) => {
     });
 });
 
-// ==================== СЕРВЕРНЫЙ ЦИКЛ ====================
+// ==================== СЕРВЕРНЫЙ ЦИКЛ (ДЕНЬ 6) ====================
+function getDeltaState() {
+    if (!gameState.gameRunning) return null;
+
+    return {
+        players: gameState.players,
+        resources: gameState.resources,
+        timer: gameState.timer
+    };
+}
+
 function startGameLoop() {
     if (gameInterval) clearInterval(gameInterval);
     if (resourceSpawnInterval) clearInterval(resourceSpawnInterval);
@@ -255,20 +266,19 @@ function startGameLoop() {
     gameInterval = setInterval(() => {
         if (!gameState.gameRunning) return;
 
-        // Применяем коллизии и сбор ресурсов
         checkCollisions();
 
-        // Рассылаем состояние
-        io.emit('game_state_update', gameState);
+        const delta = getDeltaState();
+        if (delta) {
+            io.emit('game_state_update', delta);
+        }
 
-        // Таймер
         gameState.timer -= 1 / 30;
         if (gameState.timer <= 0) {
             endGame();
         }
     }, 1000 / 30);
 
-    // Периодический спавн ресурсов
     resourceSpawnInterval = setInterval(() => {
         if (gameState.gameRunning && gameState.resources && gameState.resources.length < MAX_RESOURCES) {
             spawnResource();

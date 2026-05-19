@@ -13,18 +13,17 @@ const startGameBtn = document.getElementById('start-game-btn');
 const waitingMessage = document.getElementById('waiting-message');
 
 let myPlayerInfo = null;
-let playerElements = {};   // { socketId: DOM-элемент }
-let obstacleElements = {}; // { id: DOM-element }
+let playerElements = {};
+let obstacleElements = {};
 let resourceElements = {};
 let projectileElements = {};
 let currentGameState = null;
 let animationFrame = null;
-let playerRenderData = {}; // Интерполяция позиций игроков между обновлениями
+let playerRenderData = {};
 
 // ==================== УПРАВЛЕНИЕ КЛАВИАТУРОЙ ====================
-const keys = {};                    // Текущее состояние клавиш
+const keys = {};
 
-// Отслеживаем нажатие и отпускание клавиш
 window.addEventListener('keydown', (e) => {
     keys[e.key.toLowerCase()] = true;
 });
@@ -33,21 +32,25 @@ window.addEventListener('keyup', (e) => {
     keys[e.key.toLowerCase()] = false;
 });
 
-// Функция, которая отправляет текущее состояние клавиш на сервер
+let lastInputTime = 0;
+
 function sendInput() {
     if (!currentGameState || !myPlayerInfo) return;
 
+    const now = Date.now();
+    if (now - lastInputTime < 16) return;
+
     const input = {
-        up:    keys['w'] || keys['arrowup'],
-        down:  keys['s'] || keys['arrowdown'],
-        left:  keys['a'] || keys['arrowleft'],
+        up: keys['w'] || keys['arrowup'],
+        down: keys['s'] || keys['arrowdown'],
+        left: keys['a'] || keys['arrowleft'],
         right: keys['d'] || keys['arrowright']
     };
 
-    // Отправляем только если есть движение
     if (input.up || input.down || input.left || input.right) {
         socket.emit('player_input', input);
     }
+    lastInputTime = now;
 }
 
 // ==================== ЛОББИ ====================
@@ -100,14 +103,11 @@ socket.on('update_lobby', (players) => {
 socket.on('game_started', () => {
     lobbyScreen.style.display = 'none';
     gameBoard.style.display = 'block';
-    
-    // Запускаем клиентский игровой цикл
     startClientGameLoop();
 });
 
-// ==================== ИГРОВОЙ ЦИКЛ КЛИЕНТА (60 FPS) ====================
+// ==================== ИГРОВОЙ ЦИКЛ (с предсказательной интерполяцией) ====================
 function startClientGameLoop() {
-    // Слушаем обновления от сервера
     socket.on('game_state_update', (state) => {
         const now = performance.now();
 
@@ -117,46 +117,48 @@ function startClientGameLoop() {
                 const prev = playerRenderData[id];
 
                 if (prev && prev.nextTime) {
-                  playerRenderData[id] = {
-                      ...prev,
-                      prevX: prev.nextX,
-                      prevY: prev.nextY,
-                      prevTime: prev.nextTime,
-                      nextX: p.x,
-                      nextY: p.y,
-                      nextTime: now,
-                      color: p.color,
-                      name: p.name,
-                      score: p.score          // ← добавь эту строку
-                  };
+                    playerRenderData[id] = {
+                        ...prev,
+                        prevX: prev.nextX,
+                        prevY: prev.nextY,
+                        prevTime: prev.nextTime,
+                        nextX: p.x,
+                        nextY: p.y,
+                        nextTime: now,
+                        color: p.color,
+                        name: p.name,
+                        score: p.score,
+                        vx: p.vx || 0,
+                        vy: p.vy || 0
+                    };
                 } else {
-                  playerRenderData[id] = {
-                      prevX: p.x,
-                      prevY: p.y,
-                      nextX: p.x,
-                      nextY: p.y,
-                      prevTime: now - 33,
-                      nextTime: now,
-                      color: p.color,
-                      name: p.name,
-                      score: p.score          // ← добавь эту строку
-                  };
+                    playerRenderData[id] = {
+                        prevX: p.x,
+                        prevY: p.y,
+                        nextX: p.x,
+                        nextY: p.y,
+                        prevTime: now - 33,
+                        nextTime: now,
+                        color: p.color,
+                        name: p.name,
+                        score: p.score,
+                        vx: p.vx || 0,
+                        vy: p.vy || 0
+                    };
                 }
             });
 
             Object.keys(playerRenderData).forEach(id => {
-                if (!state.players[id]) {
-                    delete playerRenderData[id];
-                }
+                if (!state.players[id]) delete playerRenderData[id];
             });
         }
 
         currentGameState = state;
     });
 
-    // Главный цикл рендеринга
     function gameLoop(timestamp) {
         const now = timestamp || performance.now();
+
         if (!currentGameState || !currentGameState.players) {
             animationFrame = requestAnimationFrame(gameLoop);
             return;
@@ -164,22 +166,20 @@ function startClientGameLoop() {
 
         sendInput();
 
-        // Создаём/обновляем DOM-элементы игроков
+        // === ИГРОКИ (предсказательная интерполяция) ===
         Object.keys(currentGameState.players).forEach(id => {
             const p = currentGameState.players[id];
-            
+
             if (!playerElements[id]) {
-                // Создаём нового игрока
                 const playerDiv = document.createElement('div');
                 playerDiv.className = 'player';
                 playerDiv.style.backgroundColor = p.color;
-                
-                // Имя над игроком
+
                 const nameDiv = document.createElement('div');
                 nameDiv.className = 'player-name';
                 nameDiv.textContent = p.name;
                 playerDiv.appendChild(nameDiv);
-                
+
                 gameBoard.appendChild(playerDiv);
                 playerElements[id] = playerDiv;
             }
@@ -192,15 +192,24 @@ function startClientGameLoop() {
                 const interval = Math.max(16, renderInfo.nextTime - renderInfo.prevTime);
                 let t = (now - renderInfo.prevTime) / interval;
                 t = Math.min(1, Math.max(0, t));
-                x = renderInfo.prevX + (renderInfo.nextX - renderInfo.prevX) * t;
-                y = renderInfo.prevY + (renderInfo.nextY - renderInfo.prevY) * t;
+
+                const targetX = renderInfo.prevX + (renderInfo.nextX - renderInfo.prevX) * t;
+                const targetY = renderInfo.prevY + (renderInfo.nextY - renderInfo.prevY) * t;
+
+                // Предсказательная интерполяция
+                const predictionTime = 0.05;
+                const predictedX = targetX + (renderInfo.vx || 0) * predictionTime;
+                const predictedY = targetY + (renderInfo.vy || 0) * predictionTime;
+
+                x = targetX * 0.7 + predictedX * 0.3;
+                y = targetY * 0.7 + predictedY * 0.3;
             }
 
             const el = playerElements[id];
             el.style.transform = `translate3d(${x - 20}px, ${y - 20}px, 0)`;
         });
 
-        // Создаём/обновляем DOM-элементы препятствий (obstacles)
+        // Препятствия, ресурсы, снаряды (без изменений)
         if (currentGameState.obstacles) {
             currentGameState.obstacles.forEach(obs => {
                 if (!obstacleElements[obs.id]) {
@@ -211,20 +220,20 @@ function startClientGameLoop() {
                     obstacleElements[obs.id] = d;
                 }
                 const el = obstacleElements[obs.id];
-                // obstacles are typically rectangular
-                el.style.width = (obs.width || 40) + 'px';
-                el.style.height = (obs.height || 40) + 'px';
-                el.style.transform = `translate3d(${obs.x - (obs.width||40)/2}px, ${obs.y - (obs.height||40)/2}px, 0)`;
+                const w = obs.width || 40;
+                const h = obs.height || 40;
+                el.style.width = w + 'px';
+                el.style.height = h + 'px';
+                el.style.transform = `translate3d(${obs.x - w/2}px, ${obs.y - h/2}px, 0)`;
             });
         }
 
-        // Ресурсы (например, золото, health)
         if (currentGameState.resources) {
             currentGameState.resources.forEach(res => {
                 if (!resourceElements[res.id]) {
                     const d = document.createElement('div');
                     d.className = 'resource';
-                    d.title = res.type || 'resource';
+                    d.title = res.type || 'gold';
                     gameBoard.appendChild(d);
                     resourceElements[res.id] = d;
                 }
@@ -237,7 +246,6 @@ function startClientGameLoop() {
             });
         }
 
-        // Снаряды / проектайлы
         if (currentGameState.projectiles) {
             currentGameState.projectiles.forEach(pr => {
                 if (!projectileElements[pr.id]) {
@@ -255,7 +263,7 @@ function startClientGameLoop() {
             });
         }
 
-        // Удаляем игроков, которые вышли
+        // Очистка
         Object.keys(playerElements).forEach(id => {
             if (!currentGameState.players[id]) {
                 playerElements[id].remove();
@@ -263,7 +271,6 @@ function startClientGameLoop() {
             }
         });
 
-        // Удаляем препятствия, ресурсы и снаряды, которые исчезли
         Object.keys(obstacleElements).forEach(id => {
             if (!currentGameState.obstacles || !currentGameState.obstacles.find(o => o.id === id)) {
                 obstacleElements[id].remove();
@@ -288,10 +295,9 @@ function startClientGameLoop() {
         animationFrame = requestAnimationFrame(gameLoop);
     }
 
-    gameLoop(); // Запуск цикла
+    gameLoop();
 }
 
-// Вспомогательная функция
 function showError(msg) {
     errorMessage.textContent = msg;
     errorMessage.style.display = 'block';
