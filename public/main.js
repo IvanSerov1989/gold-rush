@@ -16,6 +16,11 @@ const scoreList = document.getElementById('score-list');
 const gameOverScreen = document.getElementById('game-over-screen');
 const winnerText = document.getElementById('winner-text');
 const restartBtn = document.getElementById('restart-btn');
+const inGameMenu = document.getElementById('in-game-menu');
+const menuStatus = document.getElementById('menu-status');
+const menuResumeBtn = document.getElementById('menu-resume-btn');
+const menuLeaveBtn = document.getElementById('menu-leave-btn');
+const notificationToast = document.getElementById('notification-toast');
 
 let myPlayerInfo = null;
 let playerElements = {};
@@ -25,6 +30,8 @@ let projectileElements = {};
 let currentGameState = null;
 let animationFrame = null;
 let playerRenderData = {};
+let menuOpen = false;
+let gamePaused = false;
 
 // ==================== УПРАВЛЕНИЕ КЛАВИАТУРОЙ ====================
 const keys = {};
@@ -40,7 +47,7 @@ window.addEventListener('keyup', (e) => {
 let lastInputTime = 0;
 
 function sendInput() {
-    if (!currentGameState || !myPlayerInfo) return;
+    if (!currentGameState || !myPlayerInfo || gamePaused) return;
 
     const now = Date.now();
     if (now - lastInputTime < 16) return;
@@ -56,6 +63,32 @@ function sendInput() {
         socket.emit('player_input', input);
     }
     lastInputTime = now;
+}
+
+function toggleMenu(open) {
+    menuOpen = open;
+    inGameMenu.style.display = open ? 'flex' : 'none';
+    gamePaused = open;
+    menuStatus.textContent = open ? 'Игра приостановлена' : 'Игра продолжается';
+    if (open) {
+        socket.emit('pause_game');
+    } else {
+        socket.emit('resume_game');
+    }
+}
+
+function showNotification(message) {
+    notificationToast.textContent = message;
+    notificationToast.classList.remove('hide');
+    notificationToast.classList.add('show');
+    notificationToast.style.display = 'block';
+
+    clearTimeout(notificationToast.hideTimeout);
+    notificationToast.hideTimeout = setTimeout(() => {
+        notificationToast.classList.remove('show');
+        notificationToast.classList.add('hide');
+        setTimeout(() => notificationToast.style.display = 'none', 250);
+    }, 3000);
 }
 
 function formatTime(seconds) {
@@ -93,6 +126,35 @@ function showGameOver(state) {
 
 restartBtn.addEventListener('click', () => {
     window.location.reload();
+});
+
+menuResumeBtn.addEventListener('click', () => {
+    toggleMenu(false);
+});
+
+menuLeaveBtn.addEventListener('click', () => {
+    window.location.reload();
+});
+
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && gameBoard.style.display === 'block' && gameOverScreen.style.display !== 'flex') {
+        toggleMenu(!menuOpen);
+        e.preventDefault();
+    }
+});
+
+socket.on('game_paused', ({ by, paused }) => {
+    gamePaused = paused;
+    menuStatus.textContent = paused ? `Пауза: ${by}` : 'Игра продолжается';
+    showNotification(paused ? `${by} приостановил игру` : `${by} продолжил игру`);
+    if (paused && !menuOpen) {
+        inGameMenu.style.display = 'flex';
+        menuOpen = true;
+    }
+});
+
+socket.on('player_left', ({ name }) => {
+    showNotification(`${name} вышел из игры`);
 });
 
 // ==================== ЛОББИ ====================
@@ -145,13 +207,14 @@ socket.on('update_lobby', (players) => {
 socket.on('game_started', () => {
     lobbyScreen.style.display = 'none';
     gameBoard.style.display = 'block';
+    inGameMenu.style.display = 'none';
+    menuOpen = false;
+    gamePaused = false;
     startClientGameLoop();
 });
 
 // ==================== ИГРОВОЙ ЦИКЛ (с предсказательной интерполяцией) ====================
 
-    gameOverScreen.style.display = 'none';
-    
 socket.on('game_ended', (state) => {
     currentGameState = state;
     updateHud(state);

@@ -165,7 +165,8 @@ io.on('connection', (socket) => {
             resources: [],
             projectiles: [],
             timer: 180,
-            gameRunning: true
+            gameRunning: true,
+            paused: false
         };
 
         const startPositions = [
@@ -197,7 +198,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('player_input', (input) => {
-        if (!gameState.gameRunning || !gameState.players[socket.id]) return;
+        if (!gameState.gameRunning || !gameState.players[socket.id] || gameState.paused) return;
 
         const player = gameState.players[socket.id];
         let dx = 0, dy = 0;
@@ -228,6 +229,7 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => {
         console.log(`Отключение: ${socket.id}`);
         if (players[socket.id]) {
+            const leaverName = players[socket.id].name;
             const wasLeader = players[socket.id].isLeader;
             delete players[socket.id];
             if (gameState.players) delete gameState.players[socket.id];
@@ -243,8 +245,21 @@ io.on('connection', (socket) => {
                 if (resourceSpawnInterval) clearInterval(resourceSpawnInterval);
             }
 
+            io.emit('player_left', { name: leaverName });
             io.emit('update_lobby', Object.values(players));
         }
+    });
+
+    socket.on('pause_game', () => {
+        if (!gameState.gameRunning || !gameState.players[socket.id] || gameState.paused) return;
+        gameState.paused = true;
+        io.emit('game_paused', { by: players[socket.id].name, paused: true });
+    });
+
+    socket.on('resume_game', () => {
+        if (!gameState.gameRunning || !gameState.players[socket.id] || !gameState.paused) return;
+        gameState.paused = false;
+        io.emit('game_paused', { by: players[socket.id].name, paused: false });
     });
 });
 
@@ -254,8 +269,11 @@ function getDeltaState() {
 
     return {
         players: gameState.players,
+        obstacles: gameState.obstacles,
         resources: gameState.resources,
-        timer: gameState.timer
+        projectiles: gameState.projectiles,
+        timer: gameState.timer,
+        paused: gameState.paused || false
     };
 }
 
@@ -272,6 +290,8 @@ function startGameLoop() {
         if (delta) {
             io.emit('game_state_update', delta);
         }
+
+        if (gameState.paused) return;
 
         gameState.timer -= 1 / 30;
         if (gameState.timer <= 0) {

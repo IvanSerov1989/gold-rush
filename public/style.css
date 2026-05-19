@@ -195,6 +195,75 @@ li {
     z-index: 30;
 }
 
+.menu-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.65);
+    z-index: 35;
+}
+
+.menu-box {
+    background: #1f2b35;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 16px;
+    padding: 28px 32px;
+    width: min(320px, 90%);
+    text-align: center;
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+}
+
+.menu-box h2 {
+    margin: 0 0 12px;
+    font-size: 22px;
+}
+
+.menu-box p {
+    margin: 0 0 16px;
+    color: #e6ecf1;
+}
+
+.menu-box button {
+    width: 100%;
+    margin: 8px 0;
+}
+
+.menu-hint {
+    margin-top: 12px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.65);
+}
+
+.notification-toast {
+    position: absolute;
+    top: 90px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(30, 40, 55, 0.95);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 999px;
+    padding: 10px 18px;
+    font-size: 14px;
+    color: #fff;
+    z-index: 40;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.notification-toast.show {
+    display: block;
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+.notification-toast.hide {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px);
+}
+
 .game-over-box {
     background: #16222c;
     border: 1px solid rgba(255, 255, 255, 0.12);
