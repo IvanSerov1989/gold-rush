@@ -137,3 +137,85 @@ li {
     z-index: 12;
     box-shadow: 0 0 6px rgba(255,255,255,0.1);
 }
+
+#hud {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    z-index: 20;
+}
+
+.hud-card {
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: #fff;
+    min-width: 160px;
+    font-size: 14px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+}
+
+#leaderboard h3 {
+    margin: 0 0 6px;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+#score-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    max-height: 140px;
+    overflow: hidden;
+}
+
+#score-list li {
+    font-size: 13px;
+    margin: 4px 0;
+}
+
+#score-list li.me-score {
+    color: #f39c12;
+    font-weight: 700;
+}
+
+#game-over-screen {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 30;
+}
+
+.game-over-box {
+    background: #16222c;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    padding: 30px 32px;
+    text-align: center;
+    min-width: 280px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.55);
+}
+
+.game-over-box h2 {
+    margin: 0 0 14px;
+    font-size: 24px;
+}
+
+.game-over-box p {
+    margin: 0 0 20px;
+    font-size: 16px;
+    color: #ecf0f1;
+}
+
+#restart-btn {
+    width: 100%;
+}

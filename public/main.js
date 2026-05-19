@@ -11,6 +11,11 @@ const playersList = document.getElementById('players-list');
 const playersCount = document.getElementById('players-count');
 const startGameBtn = document.getElementById('start-game-btn');
 const waitingMessage = document.getElementById('waiting-message');
+const timerDisplay = document.getElementById('timer');
+const scoreList = document.getElementById('score-list');
+const gameOverScreen = document.getElementById('game-over-screen');
+const winnerText = document.getElementById('winner-text');
+const restartBtn = document.getElementById('restart-btn');
 
 let myPlayerInfo = null;
 let playerElements = {};
@@ -52,6 +57,43 @@ function sendInput() {
     }
     lastInputTime = now;
 }
+
+function formatTime(seconds) {
+    const total = Math.max(0, Math.round(seconds));
+    const minutes = Math.floor(total / 60);
+    const secs = total % 60;
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+}
+
+function updateHud(state) {
+    if (!state || !state.players) return;
+    timerDisplay.textContent = formatTime(state.timer || 0);
+
+    const entries = Object.values(state.players)
+        .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+
+    scoreList.innerHTML = '';
+    entries.forEach(player => {
+        const item = document.createElement('li');
+        item.textContent = `${player.name}: ${player.score}`;
+        if (player.id === socket.id) item.className = 'me-score';
+        scoreList.appendChild(item);
+    });
+}
+
+function showGameOver(state) {
+    if (!state || !state.players) return;
+    const winner = Object.values(state.players)
+        .sort((a, b) => b.score - a.score)[0];
+    winnerText.textContent = winner
+        ? `Победитель: ${winner.name} (${winner.score})`
+        : 'Игра окончена';
+    gameOverScreen.style.display = 'flex';
+}
+
+restartBtn.addEventListener('click', () => {
+    window.location.reload();
+});
 
 // ==================== ЛОББИ ====================
 joinBtn.addEventListener('click', () => {
@@ -107,6 +149,16 @@ socket.on('game_started', () => {
 });
 
 // ==================== ИГРОВОЙ ЦИКЛ (с предсказательной интерполяцией) ====================
+
+    gameOverScreen.style.display = 'none';
+    
+socket.on('game_ended', (state) => {
+    currentGameState = state;
+    updateHud(state);
+    showGameOver(state);
+});
+
+// ==================== ИГРОВОЙ ЦИКЛ КЛИЕНТА (60 FPS) ====================
 function startClientGameLoop() {
     socket.on('game_state_update', (state) => {
         const now = performance.now();
@@ -154,6 +206,7 @@ function startClientGameLoop() {
         }
 
         currentGameState = state;
+        updateHud(state);
     });
 
     function gameLoop(timestamp) {

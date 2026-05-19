@@ -23,7 +23,22 @@
           <p id="waiting-message">Ожидаем лидера для старта...</p>
       </div>
 
-      <div id="game-board" style="display: none;"></div>
+      <div id="game-board" style="display: none;">
+          <div id="hud">
+              <div id="timer" class="hud-card">Время: <span>00:00</span></div>
+              <div id="leaderboard" class="hud-card">
+                  <h3>Таблица</h3>
+                  <ul id="score-list"></ul>
+              </div>
+          </div>
+          <div id="game-over-screen" style="display: none;">
+              <div class="game-over-box">
+                  <h2>Игра окончена</h2>
+                  <p id="winner-text">Победитель: —</p>
+                  <button id="restart-btn">Вернуться в лобби</button>
+              </div>
+          </div>
+      </div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
