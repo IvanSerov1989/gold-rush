@@ -6,27 +6,147 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
+
 const PORT = process.env.PORT || 3000;
 
 app.use(express.static(path.join(__dirname, 'public')));
+
+// ==================== КОНСТАНТЫ ====================
+const MAX_PLAYERS = 4;
+const PLAYER_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f'];
+const MOVE_SPEED = 5;
+const BOARD_WIDTH = 800;
+const BOARD_HEIGHT = 600;
+const PLAYER_RADIUS = 20;
+const RESOURCE_SIZE = 14;
+const RESOURCE_VALUE = 10;
+const MAX_RESOURCES = 8;
 
 // ==================== ИГРОВОЕ СОСТОЯНИЕ ====================
 let players = {};
 let gameState = {};
 let gameInProgress = false;
-const MAX_PLAYERS = 4;
-const PLAYER_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f'];
+let gameInterval = null;
+let resourceSpawnInterval = null;
 
-const MOVE_SPEED = 5;
-const BOARD_WIDTH = 800;
-const BOARD_HEIGHT = 600;
-const PLAYER_SIZE = 40;
+// Статичные препятствия (стены/камни)
+const OBSTACLES = [
+    { id: 'obs1', x: 200, y: 150, width: 80, height: 30, color: '#7f8c8d' },
+    { id: 'obs2', x: 600, y: 150, width: 80, height: 30, color: '#7f8c8d' },
+    { id: 'obs3', x: 400, y: 300, width: 60, height: 120, color: '#7f8c8d' },
+    { id: 'obs4', x: 150, y: 450, width: 100, height: 25, color: '#7f8c8d' },
+    { id: 'obs5', x: 550, y: 480, width: 120, height: 25, color: '#7f8c8d' }
+];
 
-// ==================== ОДИН ЕДИНСТВЕННЫЙ ОБРАБОТЧИК ПОДКЛЮЧЕНИЙ ====================
+// ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
+function generateResourceId() {
+    return 'res_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+}
+
+function spawnResource() {
+    if (!gameState.resources) gameState.resources = [];
+    if (gameState.resources.length >= MAX_RESOURCES) return;
+
+    let x, y, attempts = 0;
+    const margin = 30;
+
+    do {
+        x = margin + Math.random() * (BOARD_WIDTH - 2 * margin);
+        y = margin + Math.random() * (BOARD_HEIGHT - 2 * margin);
+        attempts++;
+    } while (
+        attempts < 20 &&
+        (isPositionInObstacle(x, y) || isTooCloseToOtherResource(x, y))
+    );
+
+    const newResource = {
+        id: generateResourceId(),
+        x: x,
+        y: y,
+        size: RESOURCE_SIZE,
+        color: '#f1c40f',
+        type: 'gold'
+    };
+
+    gameState.resources.push(newResource);
+}
+
+function isPositionInObstacle(x, y) {
+    return OBSTACLES.some(obs => {
+        const halfW = (obs.width || 40) / 2;
+        const halfH = (obs.height || 40) / 2;
+        return (
+            x > obs.x - halfW &&
+            x < obs.x + halfW &&
+            y > obs.y - halfH &&
+            y < obs.y + halfH
+        );
+    });
+}
+
+function isTooCloseToOtherResource(x, y, minDist = 35) {
+    if (!gameState.resources) return false;
+    return gameState.resources.some(r => {
+        const dx = r.x - x;
+        const dy = r.y - y;
+        return Math.sqrt(dx * dx + dy * dy) < minDist;
+    });
+}
+
+function checkCollisions() {
+    if (!gameState.players || !gameState.resources) return;
+
+    Object.keys(gameState.players).forEach(playerId => {
+        const player = gameState.players[playerId];
+        if (!player) return;
+
+        // 1. Столкновение с препятствиями (отталкивание)
+        OBSTACLES.forEach(obs => {
+            const halfW = (obs.width || 40) / 2;
+            const halfH = (obs.height || 40) / 2;
+
+            const closestX = Math.max(obs.x - halfW, Math.min(player.x, obs.x + halfW));
+            const closestY = Math.max(obs.y - halfH, Math.min(player.y, obs.y + halfH));
+
+            const dx = player.x - closestX;
+            const dy = player.y - closestY;
+            const distSq = dx * dx + dy * dy;
+
+            if (distSq < PLAYER_RADIUS * PLAYER_RADIUS && distSq > 0) {
+                const dist = Math.sqrt(distSq);
+                const overlap = PLAYER_RADIUS - dist;
+                player.x += (dx / dist) * overlap * 1.1;
+                player.y += (dy / dist) * overlap * 1.1;
+
+                // Ограничение границ
+                player.x = Math.max(PLAYER_RADIUS, Math.min(BOARD_WIDTH - PLAYER_RADIUS, player.x));
+                player.y = Math.max(PLAYER_RADIUS, Math.min(BOARD_HEIGHT - PLAYER_RADIUS, player.y));
+            }
+        });
+
+        // 2. Сбор ресурсов
+        for (let i = gameState.resources.length - 1; i >= 0; i--) {
+            const res = gameState.resources[i];
+            const dx = player.x - res.x;
+            const dy = player.y - res.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist < PLAYER_RADIUS + res.size / 2) {
+                // Собираем!
+                player.score = (player.score || 0) + RESOURCE_VALUE;
+                gameState.resources.splice(i, 1);
+
+                // Спавним новый ресурс
+                setTimeout(spawnResource, 800);
+            }
+        }
+    });
+}
+
+// ==================== SOCKET.IO ====================
 io.on('connection', (socket) => {
     console.log(`Подключение: ${socket.id}`);
 
-    // --- ЛОББИ ---
     socket.on('join_game', (username) => {
         if (gameInProgress) return socket.emit('join_error', 'Игра уже началась!');
         if (Object.keys(players).length >= MAX_PLAYERS) return socket.emit('join_error', 'Лобби заполнено!');
@@ -45,6 +165,9 @@ io.on('connection', (socket) => {
         gameInProgress = true;
         gameState = {
             players: {},
+            obstacles: OBSTACLES,
+            resources: [],
+            projectiles: [],
             timer: 180,
             gameRunning: true
         };
@@ -67,30 +190,40 @@ io.on('connection', (socket) => {
             };
         });
 
+        // Спавним начальные ресурсы
+        for (let i = 0; i < 6; i++) {
+            spawnResource();
+        }
+
         io.emit('game_started');
         startGameLoop();
     });
 
-    // --- ДВИЖЕНИЕ ---
     socket.on('player_input', (input) => {
         if (!gameState.gameRunning || !gameState.players[socket.id]) return;
 
         const player = gameState.players[socket.id];
         let dx = 0, dy = 0;
 
-        if (input.up)    dy -= MOVE_SPEED;
-        if (input.down)  dy += MOVE_SPEED;
-        if (input.left)  dx -= MOVE_SPEED;
+        if (input.up) dy -= MOVE_SPEED;
+        if (input.down) dy += MOVE_SPEED;
+        if (input.left) dx -= MOVE_SPEED;
         if (input.right) dx += MOVE_SPEED;
 
-        player.x += dx;
-        player.y += dy;
+        if (dx !== 0 || dy !== 0) {
+            const len = Math.sqrt(dx * dx + dy * dy);
+            dx = (dx / len) * MOVE_SPEED;
+            dy = (dy / len) * MOVE_SPEED;
 
-        player.x = Math.max(PLAYER_SIZE / 2, Math.min(BOARD_WIDTH - PLAYER_SIZE / 2, player.x));
-        player.y = Math.max(PLAYER_SIZE / 2, Math.min(BOARD_HEIGHT - PLAYER_SIZE / 2, player.y));
+            player.x += dx;
+            player.y += dy;
+
+            // Ограничение границ
+            player.x = Math.max(PLAYER_RADIUS, Math.min(BOARD_WIDTH - PLAYER_RADIUS, player.x));
+            player.y = Math.max(PLAYER_RADIUS, Math.min(BOARD_HEIGHT - PLAYER_RADIUS, player.y));
+        }
     });
 
-    // --- ОТКЛЮЧЕНИЕ ---
     socket.on('disconnect', () => {
         console.log(`Отключение: ${socket.id}`);
         if (players[socket.id]) {
@@ -101,35 +234,51 @@ io.on('connection', (socket) => {
             if (wasLeader && Object.keys(players).length > 0) {
                 players[Object.keys(players)[0]].isLeader = true;
             }
+
             if (Object.keys(players).length === 0) {
                 gameInProgress = false;
                 gameState = {};
+                if (gameInterval) clearInterval(gameInterval);
+                if (resourceSpawnInterval) clearInterval(resourceSpawnInterval);
             }
+
             io.emit('update_lobby', Object.values(players));
         }
     });
 });
 
 // ==================== СЕРВЕРНЫЙ ЦИКЛ ====================
-let gameInterval = null;
-
 function startGameLoop() {
     if (gameInterval) clearInterval(gameInterval);
+    if (resourceSpawnInterval) clearInterval(resourceSpawnInterval);
 
     gameInterval = setInterval(() => {
         if (!gameState.gameRunning) return;
 
+        // Применяем коллизии и сбор ресурсов
+        checkCollisions();
+
+        // Рассылаем состояние
         io.emit('game_state_update', gameState);
 
-        gameState.timer -= 1 / 30;           // правильный таймер
+        // Таймер
+        gameState.timer -= 1 / 30;
         if (gameState.timer <= 0) {
             endGame();
         }
     }, 1000 / 30);
+
+    // Периодический спавн ресурсов
+    resourceSpawnInterval = setInterval(() => {
+        if (gameState.gameRunning && gameState.resources && gameState.resources.length < MAX_RESOURCES) {
+            spawnResource();
+        }
+    }, 4500);
 }
 
 function endGame() {
     clearInterval(gameInterval);
+    clearInterval(resourceSpawnInterval);
     gameState.gameRunning = false;
     gameInProgress = false;
     io.emit('game_ended', gameState);

@@ -23,7 +23,6 @@ let playerRenderData = {}; // Интерполяция позиций игрок
 
 // ==================== УПРАВЛЕНИЕ КЛАВИАТУРОЙ ====================
 const keys = {};                    // Текущее состояние клавиш
-const SPEED = 5;                    // Скорость движения (пикселей за тик)
 
 // Отслеживаем нажатие и отпускание клавиш
 window.addEventListener('keydown', (e) => {
@@ -118,28 +117,30 @@ function startClientGameLoop() {
                 const prev = playerRenderData[id];
 
                 if (prev && prev.nextTime) {
-                    playerRenderData[id] = {
-                        ...prev,
-                        prevX: prev.nextX,
-                        prevY: prev.nextY,
-                        prevTime: prev.nextTime,
-                        nextX: p.x,
-                        nextY: p.y,
-                        nextTime: now,
-                        color: p.color,
-                        name: p.name
-                    };
+                  playerRenderData[id] = {
+                      ...prev,
+                      prevX: prev.nextX,
+                      prevY: prev.nextY,
+                      prevTime: prev.nextTime,
+                      nextX: p.x,
+                      nextY: p.y,
+                      nextTime: now,
+                      color: p.color,
+                      name: p.name,
+                      score: p.score          // ← добавь эту строку
+                  };
                 } else {
-                    playerRenderData[id] = {
-                        prevX: p.x,
-                        prevY: p.y,
-                        nextX: p.x,
-                        nextY: p.y,
-                        prevTime: now - 33,
-                        nextTime: now,
-                        color: p.color,
-                        name: p.name
-                    };
+                  playerRenderData[id] = {
+                      prevX: p.x,
+                      prevY: p.y,
+                      nextX: p.x,
+                      nextY: p.y,
+                      prevTime: now - 33,
+                      nextTime: now,
+                      color: p.color,
+                      name: p.name,
+                      score: p.score          // ← добавь эту строку
+                  };
                 }
             });
 
