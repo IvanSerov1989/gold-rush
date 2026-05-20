@@ -2,16 +2,13 @@ const socket = io();
 
 // ==================== ЗВУКОВОЙ МЕНЕДЖЕР ====================
 let audioContext;
-
 function initAudio() {
     if (!audioContext) {
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
     }
 }
-
 function playSound(type) {
     if (!audioContext) initAudio();
-
     const oscillator = audioContext.createOscillator();
     const gain = audioContext.createGain();
     const filter = audioContext.createBiquadFilter();
@@ -21,7 +18,7 @@ function playSound(type) {
     gain.connect(audioContext.destination);
 
     switch (type) {
-        case 'coin': // Сбор монеты
+        case 'coin':
             oscillator.type = 'sawtooth';
             oscillator.frequency.value = 880;
             gain.gain.value = 0.3;
@@ -29,38 +26,33 @@ function playSound(type) {
             filter.frequency.value = 1200;
             setTimeout(() => gain.gain.linearRampToValueAtTime(0.001, audioContext.currentTime + 0.15), 50);
             break;
-
-        case 'start': // Старт игры
+        case 'start':
             oscillator.type = 'sine';
             oscillator.frequency.value = 440;
             gain.gain.value = 0.4;
             setTimeout(() => oscillator.frequency.linearRampToValueAtTime(880, audioContext.currentTime + 0.4), 100);
             setTimeout(() => gain.gain.linearRampToValueAtTime(0.001, audioContext.currentTime + 0.6), 300);
             break;
-
-        case 'end': // Конец игры
+        case 'end':
             oscillator.type = 'sawtooth';
             oscillator.frequency.value = 220;
             gain.gain.value = 0.5;
             setTimeout(() => oscillator.frequency.linearRampToValueAtTime(110, audioContext.currentTime + 1.2), 200);
             setTimeout(() => gain.gain.linearRampToValueAtTime(0.001, audioContext.currentTime + 1.5), 800);
             break;
-
-        case 'pause': // Пауза
+        case 'pause':
             oscillator.type = 'square';
             oscillator.frequency.value = 300;
             gain.gain.value = 0.25;
             setTimeout(() => gain.gain.linearRampToValueAtTime(0.001, audioContext.currentTime + 0.2), 80);
             break;
-
-        case 'resume': // Продолжение
+        case 'resume':
             oscillator.type = 'sine';
             oscillator.frequency.value = 600;
             gain.gain.value = 0.3;
             setTimeout(() => gain.gain.linearRampToValueAtTime(0.001, audioContext.currentTime + 0.25), 100);
             break;
     }
-
     oscillator.start();
     setTimeout(() => oscillator.stop(), 2000);
 }
@@ -98,8 +90,9 @@ let animationFrame = null;
 let playerRenderData = {};
 let menuOpen = false;
 let gamePaused = false;
+let gameStartTime = 0;
 
-// Запуск аудио при первом клике (требование браузеров)
+// Запуск аудио при первом клике
 document.addEventListener('click', () => {
     if (!audioContext) initAudio();
 }, { once: true });
@@ -110,8 +103,10 @@ window.addEventListener('keydown', (e) => { keys[e.key.toLowerCase()] = true; })
 window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
 
 let lastInputTime = 0;
+
 function sendInput() {
-    if (!currentGameState || !myPlayerInfo || gamePaused) return;
+    if (!currentGameState || !myPlayerInfo || currentGameState.paused) return;
+
     const now = Date.now();
     if (now - lastInputTime < 16) return;
 
@@ -166,6 +161,7 @@ function formatTime(seconds) {
 
 function updateHud(state) {
     if (!state || !state.players) return;
+
     timerDisplay.textContent = formatTime(state.timer || 0);
 
     const entries = Object.values(state.players)
@@ -182,22 +178,21 @@ function updateHud(state) {
 
 function showGameOver(state) {
     if (!state || !state.players) return;
+
     const winner = Object.values(state.players)
         .sort((a, b) => b.score - a.score)[0];
-    winnerText.textContent = winner 
-        ? `Победитель: ${winner.name} (${winner.score})` 
+
+    winnerText.textContent = winner
+        ? `Победитель: ${winner.name} (${winner.score})`
         : 'Игра окончена';
+
     gameOverScreen.style.display = 'flex';
 }
 
 // ==================== КНОПКИ ====================
 restartBtn.addEventListener('click', () => window.location.reload());
-
 menuResumeBtn.addEventListener('click', () => toggleMenu(false));
-
-menuLeaveBtn.addEventListener('click', () => {
-    socket.emit('leave_game');
-});
+menuLeaveBtn.addEventListener('click', () => socket.emit('leave_game'));
 
 window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && gameBoard.style.display === 'block' && gameOverScreen.style.display !== 'flex') {
@@ -244,6 +239,7 @@ socket.on('update_lobby', (players) => {
     players.forEach(player => {
         const li = document.createElement('li');
         li.textContent = player.name;
+
         if (player.isLeader) {
             const badge = document.createElement('span');
             badge.textContent = '👑 Лидер';
@@ -272,6 +268,7 @@ socket.on('game_started', () => {
     menuOpen = false;
     gamePaused = false;
     if (pauseOverlay) pauseOverlay.style.display = 'none';
+
     startClientGameLoop();
     playSound('start');
 });
@@ -280,7 +277,6 @@ socket.on('game_ended', (state) => {
     currentGameState = state;
     updateHud(state);
     showGameOver(state);
-
     if (menuOpen) toggleMenu(false);
     if (pauseOverlay) pauseOverlay.style.display = 'none';
     playSound('end');
@@ -288,6 +284,8 @@ socket.on('game_ended', (state) => {
 
 // ==================== ГЛАВНЫЙ ИГРОВОЙ ЦИКЛ ====================
 function startClientGameLoop() {
+    gameStartTime = performance.now();
+
     socket.on('game_state_update', (state) => {
         const now = performance.now();
 
@@ -325,14 +323,28 @@ function startClientGameLoop() {
 
     function gameLoop(timestamp) {
         const now = timestamp || performance.now();
+
         if (!currentGameState || !currentGameState.players) {
             animationFrame = requestAnimationFrame(gameLoop);
             return;
         }
 
-        sendInput();
+        if (currentGameState.paused) {
+            gameBoard.style.filter = 'brightness(0.6) saturate(0.7)';
+            if (pauseOverlay) pauseOverlay.style.display = 'flex';
+            animationFrame = requestAnimationFrame(gameLoop);
+            return;
+        } else {
+            gameBoard.style.filter = 'none';
+            if (pauseOverlay) pauseOverlay.style.display = 'none';
+        }
 
-        // === ИГРОКИ (интерполяция) ===
+        // Отправляем инпуты только после 400 мс (убираем дропы на старте)
+        if (now - gameStartTime > 400) {
+            sendInput();
+        }
+
+        // === ИГРОКИ ===
         Object.keys(currentGameState.players).forEach(id => {
             const p = currentGameState.players[id];
             if (!playerElements[id]) {
@@ -364,26 +376,15 @@ function startClientGameLoop() {
                 const predictedX = targetX + (renderInfo.vx || 0) * predictionTime;
                 const predictedY = targetY + (renderInfo.vy || 0) * predictionTime;
 
-                x = targetX * 0.7 + predictedX * 0.3;
-                y = targetY * 0.7 + predictedY * 0.3;
+                x = targetX * 0.75 + predictedX * 0.25;
+                y = targetY * 0.75 + predictedY * 0.25;
             }
 
             const el = playerElements[id];
             el.style.transform = `translate3d(${x - 20}px, ${y - 20}px, 0)`;
         });
 
-        // ==================== ЗВУК ПРИ СБОРЕ МОНЕТЫ ====================
-        if (currentGameState.resources) {
-            const currentCount = currentGameState.resources.length;
-
-            if (typeof window.lastResourceCount === 'number' && currentCount < window.lastResourceCount) {
-                playSound('coin');
-            }
-
-            window.lastResourceCount = currentCount;
-        }
-
-        // Препятствия
+        // === ПРЕПЯТСТВИЯ ===
         if (currentGameState.obstacles) {
             currentGameState.obstacles.forEach(obs => {
                 if (!obstacleElements[obs.id]) {
@@ -402,8 +403,10 @@ function startClientGameLoop() {
             });
         }
 
-        // Ресурсы
+        // === РЕСУРСЫ (с очисткой) ===
         if (currentGameState.resources) {
+            const activeIds = new Set(currentGameState.resources.map(r => r.id));
+
             currentGameState.resources.forEach(res => {
                 if (!resourceElements[res.id]) {
                     const d = document.createElement('div');
@@ -418,23 +421,31 @@ function startClientGameLoop() {
                 el.style.backgroundColor = res.color || '#f1c40f';
                 el.style.transform = `translate3d(${res.x - size/2}px, ${res.y - size/2}px, 0)`;
             });
+
+            Object.keys(resourceElements).forEach(id => {
+                if (!activeIds.has(id)) {
+                    resourceElements[id].remove();
+                    delete resourceElements[id];
+                }
+            });
         }
 
-        // Очистка удалённых элементов
+        // === ОЧИСТКА УДАЛЁННЫХ ИГРОКОВ ===
         Object.keys(playerElements).forEach(id => {
             if (!currentGameState.players[id]) {
                 playerElements[id].remove();
                 delete playerElements[id];
+                delete playerRenderData[id];
             }
         });
 
-        // ==================== ВИЗУАЛЬНЫЙ ЭФФЕКТ ПАУЗЫ ====================
-        if (currentGameState.paused) {
-            gameBoard.style.filter = 'brightness(0.6) saturate(0.7)';
-            if (pauseOverlay) pauseOverlay.style.display = 'flex';
-        } else {
-            gameBoard.style.filter = 'none';
-            if (pauseOverlay) pauseOverlay.style.display = 'none';
+        // === ЗВУК ПРИ СБОРЕ МОНЕТЫ ===
+        if (currentGameState.resources) {
+            const currentCount = currentGameState.resources.length;
+            if (typeof window.lastResourceCount === 'number' && currentCount < window.lastResourceCount) {
+                playSound('coin');
+            }
+            window.lastResourceCount = currentCount;
         }
 
         animationFrame = requestAnimationFrame(gameLoop);
