@@ -288,3 +288,23 @@ li {
 #restart-btn {
     width: 100%;
 }
+
+#pause-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 25;
+    pointer-events: none;
+}
+
+.pause-text {
+    font-size: 72px;
+    font-weight: 900;
+    color: #fff;
+    text-shadow: 0 0 30px rgba(0,0,0,0.8);
+    letter-spacing: 8px;
+    opacity: 0.95;
+}

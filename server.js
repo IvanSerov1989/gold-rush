@@ -6,7 +6,6 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
-
 const PORT = process.env.PORT || 3000;
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -28,8 +27,8 @@ let gameState = {};
 let gameInProgress = false;
 let gameInterval = null;
 let resourceSpawnInterval = null;
+let pausedBy = null;
 
-// Статичные препятствия
 const OBSTACLES = [
     { id: 'obs1', x: 200, y: 150, width: 80, height: 30, color: '#7f8c8d' },
     { id: 'obs2', x: 600, y: 150, width: 80, height: 30, color: '#7f8c8d' },
@@ -54,33 +53,23 @@ function spawnResource() {
         x = margin + Math.random() * (BOARD_WIDTH - 2 * margin);
         y = margin + Math.random() * (BOARD_HEIGHT - 2 * margin);
         attempts++;
-    } while (
-        attempts < 20 &&
-        (isPositionInObstacle(x, y) || isTooCloseToOtherResource(x, y))
-    );
+    } while (attempts < 20 && (isPositionInObstacle(x, y) || isTooCloseToOtherResource(x, y)));
 
-    const newResource = {
+    gameState.resources.push({
         id: generateResourceId(),
-        x: x,
-        y: y,
+        x, y,
         size: RESOURCE_SIZE,
         color: '#f1c40f',
         type: 'gold'
-    };
-
-    gameState.resources.push(newResource);
+    });
 }
 
 function isPositionInObstacle(x, y) {
     return OBSTACLES.some(obs => {
         const halfW = (obs.width || 40) / 2;
         const halfH = (obs.height || 40) / 2;
-        return (
-            x > obs.x - halfW &&
-            x < obs.x + halfW &&
-            y > obs.y - halfH &&
-            y < obs.y + halfH
-        );
+        return x > obs.x - halfW && x < obs.x + halfW &&
+               y > obs.y - halfH && y < obs.y + halfH;
     });
 }
 
@@ -100,14 +89,12 @@ function checkCollisions() {
         const player = gameState.players[playerId];
         if (!player) return;
 
-        // Столкновение с препятствиями
+        // Столкновения с препятствиями
         OBSTACLES.forEach(obs => {
             const halfW = (obs.width || 40) / 2;
             const halfH = (obs.height || 40) / 2;
-
             const closestX = Math.max(obs.x - halfW, Math.min(player.x, obs.x + halfW));
             const closestY = Math.max(obs.y - halfH, Math.min(player.y, obs.y + halfH));
-
             const dx = player.x - closestX;
             const dy = player.y - closestY;
             const distSq = dx * dx + dy * dy;
@@ -117,7 +104,6 @@ function checkCollisions() {
                 const overlap = PLAYER_RADIUS - dist;
                 player.x += (dx / dist) * overlap * 1.1;
                 player.y += (dy / dist) * overlap * 1.1;
-
                 player.x = Math.max(PLAYER_RADIUS, Math.min(BOARD_WIDTH - PLAYER_RADIUS, player.x));
                 player.y = Math.max(PLAYER_RADIUS, Math.min(BOARD_HEIGHT - PLAYER_RADIUS, player.y));
             }
@@ -150,7 +136,6 @@ io.on('connection', (socket) => {
 
         const isLeader = Object.keys(players).length === 0;
         players[socket.id] = { id: socket.id, name: username, isLeader };
-
         socket.emit('join_success', players[socket.id]);
         io.emit('update_lobby', Object.values(players));
     });
@@ -159,6 +144,8 @@ io.on('connection', (socket) => {
         if (!players[socket.id] || !players[socket.id].isLeader) return;
 
         gameInProgress = true;
+        pausedBy = null;
+
         gameState = {
             players: {},
             obstacles: OBSTACLES,
@@ -166,32 +153,28 @@ io.on('connection', (socket) => {
             projectiles: [],
             timer: 180,
             gameRunning: true,
-            paused: false
+            paused: false,
+            pausedBy: null
         };
 
         const startPositions = [
-            { x: 100, y: 100 },
-            { x: 700, y: 100 },
-            { x: 100, y: 500 },
-            { x: 700, y: 500 }
+            { x: 100, y: 100 }, { x: 700, y: 100 },
+            { x: 100, y: 500 }, { x: 700, y: 500 }
         ];
 
         Object.keys(players).forEach((id, i) => {
             gameState.players[id] = {
-                id: id,
+                id,
                 name: players[id].name,
                 x: startPositions[i].x,
                 y: startPositions[i].y,
                 score: 0,
                 color: PLAYER_COLORS[i % PLAYER_COLORS.length],
-                vx: 0,
-                vy: 0
+                vx: 0, vy: 0
             };
         });
 
-        for (let i = 0; i < 6; i++) {
-            spawnResource();
-        }
+        for (let i = 0; i < 6; i++) spawnResource();
 
         io.emit('game_started');
         startGameLoop();
@@ -212,18 +195,56 @@ io.on('connection', (socket) => {
             const len = Math.sqrt(dx * dx + dy * dy);
             dx = (dx / len) * MOVE_SPEED;
             dy = (dy / len) * MOVE_SPEED;
-
             player.x += dx;
             player.y += dy;
             player.vx = dx;
             player.vy = dy;
-
             player.x = Math.max(PLAYER_RADIUS, Math.min(BOARD_WIDTH - PLAYER_RADIUS, player.x));
             player.y = Math.max(PLAYER_RADIUS, Math.min(BOARD_HEIGHT - PLAYER_RADIUS, player.y));
         } else {
             player.vx = 0;
             player.vy = 0;
         }
+    });
+
+    socket.on('pause_game', () => {
+        if (!gameState.gameRunning || !gameState.players[socket.id] || gameState.paused) return;
+        gameState.paused = true;
+        gameState.pausedBy = socket.id;
+        pausedBy = socket.id;
+        io.emit('game_paused', { by: players[socket.id].name, paused: true });
+    });
+
+    socket.on('resume_game', () => {
+        if (!gameState.gameRunning || !gameState.players[socket.id] || !gameState.paused) return;
+
+        const isPauser = gameState.pausedBy === socket.id;
+        const isLeader = players[socket.id]?.isLeader;
+
+        if (!isPauser && !isLeader) return; // Только паузер или лидер
+
+        gameState.paused = false;
+        gameState.pausedBy = null;
+        pausedBy = null;
+        io.emit('game_paused', { by: players[socket.id].name, paused: false });
+    });
+
+    socket.on('leave_game', () => {
+        if (players[socket.id]) {
+            const name = players[socket.id].name;
+            delete players[socket.id];
+            if (gameState.players) delete gameState.players[socket.id];
+
+            if (pausedBy === socket.id) {
+                gameState.paused = false;
+                pausedBy = null;
+                io.emit('game_paused', { by: name, paused: false });
+            }
+
+            io.emit('player_left', { name });
+            io.emit('update_lobby', Object.values(players));
+        }
+        socket.disconnect();
     });
 
     socket.on('disconnect', () => {
@@ -233,6 +254,12 @@ io.on('connection', (socket) => {
             const wasLeader = players[socket.id].isLeader;
             delete players[socket.id];
             if (gameState.players) delete gameState.players[socket.id];
+
+            if (pausedBy === socket.id) {
+                gameState.paused = false;
+                pausedBy = null;
+                io.emit('game_paused', { by: leaverName, paused: false });
+            }
 
             if (wasLeader && Object.keys(players).length > 0) {
                 players[Object.keys(players)[0]].isLeader = true;
@@ -249,24 +276,11 @@ io.on('connection', (socket) => {
             io.emit('update_lobby', Object.values(players));
         }
     });
-
-    socket.on('pause_game', () => {
-        if (!gameState.gameRunning || !gameState.players[socket.id] || gameState.paused) return;
-        gameState.paused = true;
-        io.emit('game_paused', { by: players[socket.id].name, paused: true });
-    });
-
-    socket.on('resume_game', () => {
-        if (!gameState.gameRunning || !gameState.players[socket.id] || !gameState.paused) return;
-        gameState.paused = false;
-        io.emit('game_paused', { by: players[socket.id].name, paused: false });
-    });
 });
 
-// ==================== СЕРВЕРНЫЙ ЦИКЛ (ДЕНЬ 6) ====================
+// ==================== СЕРВЕРНЫЙ ЦИКЛ ====================
 function getDeltaState() {
     if (!gameState.gameRunning) return null;
-
     return {
         players: gameState.players,
         obstacles: gameState.obstacles,
@@ -285,22 +299,18 @@ function startGameLoop() {
         if (!gameState.gameRunning) return;
 
         checkCollisions();
-
         const delta = getDeltaState();
-        if (delta) {
-            io.emit('game_state_update', delta);
-        }
+        if (delta) io.emit('game_state_update', delta);
 
         if (gameState.paused) return;
 
         gameState.timer -= 1 / 30;
-        if (gameState.timer <= 0) {
-            endGame();
-        }
+        if (gameState.timer <= 0) endGame();
     }, 1000 / 30);
 
     resourceSpawnInterval = setInterval(() => {
-        if (gameState.gameRunning && gameState.resources && gameState.resources.length < MAX_RESOURCES) {
+        if (gameState.gameRunning && !gameState.paused &&
+            gameState.resources && gameState.resources.length < MAX_RESOURCES) {
             spawnResource();
         }
     }, 4500);

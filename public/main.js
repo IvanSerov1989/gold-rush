@@ -1,6 +1,71 @@
 const socket = io();
 
-// DOM элементы
+// ==================== ЗВУКОВОЙ МЕНЕДЖЕР ====================
+let audioContext;
+
+function initAudio() {
+    if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+}
+
+function playSound(type) {
+    if (!audioContext) initAudio();
+
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    const filter = audioContext.createBiquadFilter();
+
+    oscillator.connect(filter);
+    filter.connect(gain);
+    gain.connect(audioContext.destination);
+
+    switch (type) {
+        case 'coin': // Сбор монеты
+            oscillator.type = 'sawtooth';
+            oscillator.frequency.value = 880;
+            gain.gain.value = 0.3;
+            filter.type = 'lowpass';
+            filter.frequency.value = 1200;
+            setTimeout(() => gain.gain.linearRampToValueAtTime(0.001, audioContext.currentTime + 0.15), 50);
+            break;
+
+        case 'start': // Старт игры
+            oscillator.type = 'sine';
+            oscillator.frequency.value = 440;
+            gain.gain.value = 0.4;
+            setTimeout(() => oscillator.frequency.linearRampToValueAtTime(880, audioContext.currentTime + 0.4), 100);
+            setTimeout(() => gain.gain.linearRampToValueAtTime(0.001, audioContext.currentTime + 0.6), 300);
+            break;
+
+        case 'end': // Конец игры
+            oscillator.type = 'sawtooth';
+            oscillator.frequency.value = 220;
+            gain.gain.value = 0.5;
+            setTimeout(() => oscillator.frequency.linearRampToValueAtTime(110, audioContext.currentTime + 1.2), 200);
+            setTimeout(() => gain.gain.linearRampToValueAtTime(0.001, audioContext.currentTime + 1.5), 800);
+            break;
+
+        case 'pause': // Пауза
+            oscillator.type = 'square';
+            oscillator.frequency.value = 300;
+            gain.gain.value = 0.25;
+            setTimeout(() => gain.gain.linearRampToValueAtTime(0.001, audioContext.currentTime + 0.2), 80);
+            break;
+
+        case 'resume': // Продолжение
+            oscillator.type = 'sine';
+            oscillator.frequency.value = 600;
+            gain.gain.value = 0.3;
+            setTimeout(() => gain.gain.linearRampToValueAtTime(0.001, audioContext.currentTime + 0.25), 100);
+            break;
+    }
+
+    oscillator.start();
+    setTimeout(() => oscillator.stop(), 2000);
+}
+
+// ==================== DOM ЭЛЕМЕНТЫ ====================
 const joinScreen = document.getElementById('join-screen');
 const lobbyScreen = document.getElementById('lobby-screen');
 const gameBoard = document.getElementById('game-board');
@@ -21,6 +86,7 @@ const menuStatus = document.getElementById('menu-status');
 const menuResumeBtn = document.getElementById('menu-resume-btn');
 const menuLeaveBtn = document.getElementById('menu-leave-btn');
 const notificationToast = document.getElementById('notification-toast');
+const pauseOverlay = document.getElementById('pause-overlay');
 
 let myPlayerInfo = null;
 let playerElements = {};
@@ -33,22 +99,19 @@ let playerRenderData = {};
 let menuOpen = false;
 let gamePaused = false;
 
-// ==================== УПРАВЛЕНИЕ КЛАВИАТУРОЙ ====================
+// Запуск аудио при первом клике (требование браузеров)
+document.addEventListener('click', () => {
+    if (!audioContext) initAudio();
+}, { once: true });
+
+// ==================== КЛАВИАТУРА ====================
 const keys = {};
-
-window.addEventListener('keydown', (e) => {
-    keys[e.key.toLowerCase()] = true;
-});
-
-window.addEventListener('keyup', (e) => {
-    keys[e.key.toLowerCase()] = false;
-});
+window.addEventListener('keydown', (e) => { keys[e.key.toLowerCase()] = true; });
+window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
 
 let lastInputTime = 0;
-
 function sendInput() {
     if (!currentGameState || !myPlayerInfo || gamePaused) return;
-
     const now = Date.now();
     if (now - lastInputTime < 16) return;
 
@@ -65,23 +128,26 @@ function sendInput() {
     lastInputTime = now;
 }
 
+// ==================== МЕНЮ И УВЕДОМЛЕНИЯ ====================
 function toggleMenu(open) {
     menuOpen = open;
     inGameMenu.style.display = open ? 'flex' : 'none';
     gamePaused = open;
-    menuStatus.textContent = open ? 'Игра приостановлена' : 'Игра продолжается';
+
     if (open) {
+        playSound('pause');
         socket.emit('pause_game');
     } else {
+        playSound('resume');
         socket.emit('resume_game');
     }
 }
 
 function showNotification(message) {
     notificationToast.textContent = message;
+    notificationToast.style.display = 'block';
     notificationToast.classList.remove('hide');
     notificationToast.classList.add('show');
-    notificationToast.style.display = 'block';
 
     clearTimeout(notificationToast.hideTimeout);
     notificationToast.hideTimeout = setTimeout(() => {
@@ -118,22 +184,19 @@ function showGameOver(state) {
     if (!state || !state.players) return;
     const winner = Object.values(state.players)
         .sort((a, b) => b.score - a.score)[0];
-    winnerText.textContent = winner
-        ? `Победитель: ${winner.name} (${winner.score})`
+    winnerText.textContent = winner 
+        ? `Победитель: ${winner.name} (${winner.score})` 
         : 'Игра окончена';
     gameOverScreen.style.display = 'flex';
 }
 
-restartBtn.addEventListener('click', () => {
-    window.location.reload();
-});
+// ==================== КНОПКИ ====================
+restartBtn.addEventListener('click', () => window.location.reload());
 
-menuResumeBtn.addEventListener('click', () => {
-    toggleMenu(false);
-});
+menuResumeBtn.addEventListener('click', () => toggleMenu(false));
 
 menuLeaveBtn.addEventListener('click', () => {
-    window.location.reload();
+    socket.emit('leave_game');
 });
 
 window.addEventListener('keydown', (e) => {
@@ -143,19 +206,19 @@ window.addEventListener('keydown', (e) => {
     }
 });
 
+// ==================== SOCKET СОБЫТИЯ ====================
 socket.on('game_paused', ({ by, paused }) => {
     gamePaused = paused;
     menuStatus.textContent = paused ? `Пауза: ${by}` : 'Игра продолжается';
     showNotification(paused ? `${by} приостановил игру` : `${by} продолжил игру`);
+
     if (paused && !menuOpen) {
         inGameMenu.style.display = 'flex';
         menuOpen = true;
     }
 });
 
-socket.on('player_left', ({ name }) => {
-    showNotification(`${name} вышел из игры`);
-});
+socket.on('player_left', ({ name }) => showNotification(`${name} вышел из игры`));
 
 // ==================== ЛОББИ ====================
 joinBtn.addEventListener('click', () => {
@@ -164,9 +227,7 @@ joinBtn.addEventListener('click', () => {
     socket.emit('join_game', username);
 });
 
-startGameBtn.addEventListener('click', () => {
-    socket.emit('start_game');
-});
+startGameBtn.addEventListener('click', () => socket.emit('start_game'));
 
 socket.on('join_error', showError);
 
@@ -210,18 +271,22 @@ socket.on('game_started', () => {
     inGameMenu.style.display = 'none';
     menuOpen = false;
     gamePaused = false;
+    if (pauseOverlay) pauseOverlay.style.display = 'none';
     startClientGameLoop();
+    playSound('start');
 });
-
-// ==================== ИГРОВОЙ ЦИКЛ (с предсказательной интерполяцией) ====================
 
 socket.on('game_ended', (state) => {
     currentGameState = state;
     updateHud(state);
     showGameOver(state);
+
+    if (menuOpen) toggleMenu(false);
+    if (pauseOverlay) pauseOverlay.style.display = 'none';
+    playSound('end');
 });
 
-// ==================== ИГРОВОЙ ЦИКЛ КЛИЕНТА (60 FPS) ====================
+// ==================== ГЛАВНЫЙ ИГРОВОЙ ЦИКЛ ====================
 function startClientGameLoop() {
     socket.on('game_state_update', (state) => {
         const now = performance.now();
@@ -234,31 +299,17 @@ function startClientGameLoop() {
                 if (prev && prev.nextTime) {
                     playerRenderData[id] = {
                         ...prev,
-                        prevX: prev.nextX,
-                        prevY: prev.nextY,
-                        prevTime: prev.nextTime,
-                        nextX: p.x,
-                        nextY: p.y,
-                        nextTime: now,
-                        color: p.color,
-                        name: p.name,
-                        score: p.score,
-                        vx: p.vx || 0,
-                        vy: p.vy || 0
+                        prevX: prev.nextX, prevY: prev.nextY, prevTime: prev.nextTime,
+                        nextX: p.x, nextY: p.y, nextTime: now,
+                        color: p.color, name: p.name, score: p.score,
+                        vx: p.vx || 0, vy: p.vy || 0
                     };
                 } else {
                     playerRenderData[id] = {
-                        prevX: p.x,
-                        prevY: p.y,
-                        nextX: p.x,
-                        nextY: p.y,
-                        prevTime: now - 33,
-                        nextTime: now,
-                        color: p.color,
-                        name: p.name,
-                        score: p.score,
-                        vx: p.vx || 0,
-                        vy: p.vy || 0
+                        prevX: p.x, prevY: p.y, nextX: p.x, nextY: p.y,
+                        prevTime: now - 33, nextTime: now,
+                        color: p.color, name: p.name, score: p.score,
+                        vx: p.vx || 0, vy: p.vy || 0
                     };
                 }
             });
@@ -274,7 +325,6 @@ function startClientGameLoop() {
 
     function gameLoop(timestamp) {
         const now = timestamp || performance.now();
-
         if (!currentGameState || !currentGameState.players) {
             animationFrame = requestAnimationFrame(gameLoop);
             return;
@@ -282,10 +332,9 @@ function startClientGameLoop() {
 
         sendInput();
 
-        // === ИГРОКИ (предсказательная интерполяция) ===
+        // === ИГРОКИ (интерполяция) ===
         Object.keys(currentGameState.players).forEach(id => {
             const p = currentGameState.players[id];
-
             if (!playerElements[id]) {
                 const playerDiv = document.createElement('div');
                 playerDiv.className = 'player';
@@ -301,8 +350,7 @@ function startClientGameLoop() {
             }
 
             const renderInfo = playerRenderData[id];
-            let x = p.x;
-            let y = p.y;
+            let x = p.x, y = p.y;
 
             if (renderInfo) {
                 const interval = Math.max(16, renderInfo.nextTime - renderInfo.prevTime);
@@ -312,7 +360,6 @@ function startClientGameLoop() {
                 const targetX = renderInfo.prevX + (renderInfo.nextX - renderInfo.prevX) * t;
                 const targetY = renderInfo.prevY + (renderInfo.nextY - renderInfo.prevY) * t;
 
-                // Предсказательная интерполяция
                 const predictionTime = 0.05;
                 const predictedX = targetX + (renderInfo.vx || 0) * predictionTime;
                 const predictedY = targetY + (renderInfo.vy || 0) * predictionTime;
@@ -325,7 +372,18 @@ function startClientGameLoop() {
             el.style.transform = `translate3d(${x - 20}px, ${y - 20}px, 0)`;
         });
 
-        // Препятствия, ресурсы, снаряды (без изменений)
+        // ==================== ЗВУК ПРИ СБОРЕ МОНЕТЫ ====================
+        if (currentGameState.resources) {
+            const currentCount = currentGameState.resources.length;
+
+            if (typeof window.lastResourceCount === 'number' && currentCount < window.lastResourceCount) {
+                playSound('coin');
+            }
+
+            window.lastResourceCount = currentCount;
+        }
+
+        // Препятствия
         if (currentGameState.obstacles) {
             currentGameState.obstacles.forEach(obs => {
                 if (!obstacleElements[obs.id]) {
@@ -338,48 +396,31 @@ function startClientGameLoop() {
                 const el = obstacleElements[obs.id];
                 const w = obs.width || 40;
                 const h = obs.height || 40;
-                el.style.width = w + 'px';
-                el.style.height = h + 'px';
+                el.style.width = `${w}px`;
+                el.style.height = `${h}px`;
                 el.style.transform = `translate3d(${obs.x - w/2}px, ${obs.y - h/2}px, 0)`;
             });
         }
 
+        // Ресурсы
         if (currentGameState.resources) {
             currentGameState.resources.forEach(res => {
                 if (!resourceElements[res.id]) {
                     const d = document.createElement('div');
                     d.className = 'resource';
-                    d.title = res.type || 'gold';
                     gameBoard.appendChild(d);
                     resourceElements[res.id] = d;
                 }
                 const el = resourceElements[res.id];
                 const size = res.size || 14;
-                el.style.width = size + 'px';
-                el.style.height = size + 'px';
+                el.style.width = `${size}px`;
+                el.style.height = `${size}px`;
                 el.style.backgroundColor = res.color || '#f1c40f';
                 el.style.transform = `translate3d(${res.x - size/2}px, ${res.y - size/2}px, 0)`;
             });
         }
 
-        if (currentGameState.projectiles) {
-            currentGameState.projectiles.forEach(pr => {
-                if (!projectileElements[pr.id]) {
-                    const d = document.createElement('div');
-                    d.className = 'projectile';
-                    gameBoard.appendChild(d);
-                    projectileElements[pr.id] = d;
-                }
-                const el = projectileElements[pr.id];
-                const size = pr.size || 8;
-                el.style.width = size + 'px';
-                el.style.height = size + 'px';
-                el.style.backgroundColor = pr.color || '#ecf0f1';
-                el.style.transform = `translate3d(${pr.x - size/2}px, ${pr.y - size/2}px, 0)`;
-            });
-        }
-
-        // Очистка
+        // Очистка удалённых элементов
         Object.keys(playerElements).forEach(id => {
             if (!currentGameState.players[id]) {
                 playerElements[id].remove();
@@ -387,26 +428,14 @@ function startClientGameLoop() {
             }
         });
 
-        Object.keys(obstacleElements).forEach(id => {
-            if (!currentGameState.obstacles || !currentGameState.obstacles.find(o => o.id === id)) {
-                obstacleElements[id].remove();
-                delete obstacleElements[id];
-            }
-        });
-
-        Object.keys(resourceElements).forEach(id => {
-            if (!currentGameState.resources || !currentGameState.resources.find(r => r.id === id)) {
-                resourceElements[id].remove();
-                delete resourceElements[id];
-            }
-        });
-
-        Object.keys(projectileElements).forEach(id => {
-            if (!currentGameState.projectiles || !currentGameState.projectiles.find(p => p.id === id)) {
-                projectileElements[id].remove();
-                delete projectileElements[id];
-            }
-        });
+        // ==================== ВИЗУАЛЬНЫЙ ЭФФЕКТ ПАУЗЫ ====================
+        if (currentGameState.paused) {
+            gameBoard.style.filter = 'brightness(0.6) saturate(0.7)';
+            if (pauseOverlay) pauseOverlay.style.display = 'flex';
+        } else {
+            gameBoard.style.filter = 'none';
+            if (pauseOverlay) pauseOverlay.style.display = 'none';
+        }
 
         animationFrame = requestAnimationFrame(gameLoop);
     }
