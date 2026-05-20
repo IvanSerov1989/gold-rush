@@ -55,12 +55,16 @@ function spawnResource() {
         attempts++;
     } while (attempts < 20 && (isPositionInObstacle(x, y) || isTooCloseToOtherResource(x, y)));
 
+    const types = ['gold', 'gold', 'gold', 'speed', 'shield'];
+    const type = types[Math.floor(Math.random() * types.length)];
+    const color = type === 'speed' ? '#3498db' : type === 'shield' ? '#9b59b6' : '#f1c40f';
+
     gameState.resources.push({
         id: generateResourceId(),
         x, y,
         size: RESOURCE_SIZE,
-        color: '#f1c40f',
-        type: 'gold'
+        color,
+        type
     });
 }
 
@@ -117,8 +121,19 @@ function checkCollisions() {
             const dist = Math.sqrt(dx * dx + dy * dy);
 
             if (dist < PLAYER_RADIUS + res.size / 2) {
-                player.score = (player.score || 0) + RESOURCE_VALUE;
+                const powerType = res.type || 'gold';
+                if (powerType === 'speed') {
+                    player.speedBoostTime = 120;
+                    player.score = (player.score || 0) + 5;
+                } else if (powerType === 'shield') {
+                    player.shieldTime = 150;
+                    player.score = (player.score || 0) + 5;
+                } else {
+                    player.score = (player.score || 0) + RESOURCE_VALUE;
+                }
+
                 gameState.resources.splice(i, 1);
+                io.emit('resource_collected', { by: player.name, type: powerType });
                 setTimeout(spawnResource, 800);
             }
         }
@@ -191,10 +206,12 @@ io.on('connection', (socket) => {
         if (input.left) dx -= MOVE_SPEED;
         if (input.right) dx += MOVE_SPEED;
 
+        const speedMultiplier = player.speedBoostTime > 0 ? 1.6 : 1;
+
         if (dx !== 0 || dy !== 0) {
             const len = Math.sqrt(dx * dx + dy * dy);
-            dx = (dx / len) * MOVE_SPEED;
-            dy = (dy / len) * MOVE_SPEED;
+            dx = (dx / len) * MOVE_SPEED * speedMultiplier;
+            dy = (dy / len) * MOVE_SPEED * speedMultiplier;
             player.x += dx;
             player.y += dy;
             player.vx = dx;
@@ -302,10 +319,15 @@ function startGameLoop() {
         const delta = getDeltaState();
         if (delta) io.emit('game_state_update', delta);
 
-        if (gameState.paused) return;
+        if (!gameState.paused) {
+            Object.values(gameState.players || {}).forEach(player => {
+                player.speedBoostTime = Math.max(0, (player.speedBoostTime || 0) - 1);
+                player.shieldTime = Math.max(0, (player.shieldTime || 0) - 1);
+            });
 
-        gameState.timer -= 1 / 30;
-        if (gameState.timer <= 0) endGame();
+            gameState.timer -= 1 / 30;
+            if (gameState.timer <= 0) endGame();
+        }
     }, 1000 / 30);
 
     resourceSpawnInterval = setInterval(() => {

@@ -26,6 +26,22 @@ function playSound(type) {
             filter.frequency.value = 1200;
             setTimeout(() => gain.gain.linearRampToValueAtTime(0.001, audioContext.currentTime + 0.15), 50);
             break;
+        case 'power':
+            oscillator.type = 'triangle';
+            oscillator.frequency.value = 660;
+            gain.gain.value = 0.35;
+            filter.type = 'highpass';
+            filter.frequency.value = 900;
+            setTimeout(() => gain.gain.linearRampToValueAtTime(0.001, audioContext.currentTime + 0.18), 60);
+            break;
+        case 'shield':
+            oscillator.type = 'square';
+            oscillator.frequency.value = 520;
+            gain.gain.value = 0.3;
+            filter.type = 'bandpass';
+            filter.frequency.value = 700;
+            setTimeout(() => gain.gain.linearRampToValueAtTime(0.001, audioContext.currentTime + 0.2), 80);
+            break;
         case 'start':
             oscillator.type = 'sine';
             oscillator.frequency.value = 440;
@@ -215,6 +231,18 @@ socket.on('game_paused', ({ by, paused }) => {
 
 socket.on('player_left', ({ name }) => showNotification(`${name} вышел из игры`));
 
+socket.on('resource_collected', ({ by, type }) => {
+    const labels = {
+        gold: 'золото',
+        speed: 'ускорение',
+        shield: 'щит'
+    };
+    showNotification(`${by} взял ${labels[type] || type}`);
+    if (type === 'gold') playSound('coin');
+    else if (type === 'speed') playSound('power');
+    else if (type === 'shield') playSound('shield');
+});
+
 // ==================== ЛОББИ ====================
 joinBtn.addEventListener('click', () => {
     const username = usernameInput.value.trim();
@@ -381,6 +409,8 @@ function startClientGameLoop() {
             }
 
             const el = playerElements[id];
+            el.classList.toggle('player-speed', p.speedBoostTime > 0);
+            el.classList.toggle('player-shield', p.shieldTime > 0);
             el.style.transform = `translate3d(${x - 20}px, ${y - 20}px, 0)`;
         });
 
@@ -410,7 +440,8 @@ function startClientGameLoop() {
             currentGameState.resources.forEach(res => {
                 if (!resourceElements[res.id]) {
                     const d = document.createElement('div');
-                    d.className = 'resource';
+                    d.className = `resource resource-${res.type}`;
+                    d.title = res.type === 'gold' ? 'Золото' : res.type === 'speed' ? 'Ускорение' : 'Щит';
                     gameBoard.appendChild(d);
                     resourceElements[res.id] = d;
                 }
@@ -438,15 +469,6 @@ function startClientGameLoop() {
                 delete playerRenderData[id];
             }
         });
-
-        // === ЗВУК ПРИ СБОРЕ МОНЕТЫ ===
-        if (currentGameState.resources) {
-            const currentCount = currentGameState.resources.length;
-            if (typeof window.lastResourceCount === 'number' && currentCount < window.lastResourceCount) {
-                playSound('coin');
-            }
-            window.lastResourceCount = currentCount;
-        }
 
         animationFrame = requestAnimationFrame(gameLoop);
     }

@@ -129,6 +129,20 @@ li {
     z-index: 8;
 }
 
+.resource-gold { background: #f1c40f; }
+.resource-speed { background: #3498db; box-shadow: 0 0 10px rgba(52,152,219,0.75); }
+.resource-shield { background: #9b59b6; box-shadow: 0 0 10px rgba(155,89,182,0.75); }
+
+.player-speed {
+    box-shadow: 0 0 18px rgba(52,152,219,0.9);
+    border-color: #2980b9;
+}
+
+.player-shield {
+    box-shadow: 0 0 20px rgba(46,204,113,0.95);
+    border-color: #27ae60;
+}
+
 /* Проектайлы */
 .projectile {
     position: absolute;
