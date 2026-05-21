@@ -89,6 +89,55 @@ function isTooCloseToOtherResource(x, y, minDist = 35) {
 function checkCollisions() {
     if (!gameState.players || !gameState.resources) return;
 
+    // Пропускаем игроков с cooldown
+    Object.keys(gameState.players).forEach(id => {
+        const p = gameState.players[id];
+        if (p.collisionCooldown > 0) {
+            p.collisionCooldown--;
+        }
+    });
+
+   // === 1. Столкновения игроков (улучшенная версия) ===
+    const ids = Object.keys(gameState.players);
+    for (let i = 0; i < ids.length; i++) {
+        for (let j = i + 1; j < ids.length; j++) {
+            const p1 = gameState.players[ids[i]];
+            const p2 = gameState.players[ids[j]];
+            if (!p1 || !p2) continue;
+
+            const dx = p1.x - p2.x;
+            const dy = p1.y - p2.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist < PLAYER_RADIUS * 2 && dist > 0) {
+                const overlap = (PLAYER_RADIUS * 2 - dist) / 2;
+                
+                // УСИЛЕННЫЙ толчок
+                const pushX = (dx / dist) * overlap * 1.8;
+                const pushY = (dy / dist) * overlap * 1.8;
+
+                p1.x += pushX;
+                p1.y += pushY;
+                p2.x -= pushX;
+                p2.y -= pushY;
+
+                // Стан + защита от повторного столкновения
+                const speed1 = Math.sqrt((p1.vx || 0) ** 2 + (p1.vy || 0) ** 2);
+                const speed2 = Math.sqrt((p2.vx || 0) ** 2 + (p2.vy || 0) ** 2);
+
+                if (speed1 > 3.5 && !p1.shieldTime) {
+                    p1.stunTime = 35;
+                    p1.collisionCooldown = 8; // защита на 8 тиков (~0.27 сек)
+                }
+                if (speed2 > 3.5 && !p2.shieldTime) {
+                    p2.stunTime = 35;
+                    p2.collisionCooldown = 8;
+                }
+            }
+        }
+    }
+
+    // === 2. Столкновения с препятствиями + сбор ресурсов ===
     Object.keys(gameState.players).forEach(playerId => {
         const player = gameState.players[playerId];
         if (!player) return;
@@ -122,19 +171,20 @@ function checkCollisions() {
 
             if (dist < PLAYER_RADIUS + res.size / 2) {
                 const powerType = res.type || 'gold';
+
                 if (powerType === 'speed') {
-                    player.speedBoostTime = 120;
-                    player.score = (player.score || 0) + 5;
+                    player.speedBoostTime = 135;
+                    player.score = (player.score || 0) + 8;
                 } else if (powerType === 'shield') {
-                    player.shieldTime = 150;
-                    player.score = (player.score || 0) + 5;
+                    player.shieldTime = 165;
+                    player.score = (player.score || 0) + 8;
                 } else {
                     player.score = (player.score || 0) + RESOURCE_VALUE;
                 }
 
                 gameState.resources.splice(i, 1);
                 io.emit('resource_collected', { by: player.name, type: powerType });
-                setTimeout(spawnResource, 800);
+                setTimeout(spawnResource, 750);
             }
         }
     });
@@ -165,7 +215,6 @@ io.on('connection', (socket) => {
             players: {},
             obstacles: OBSTACLES,
             resources: [],
-            projectiles: [],
             timer: 180,
             gameRunning: true,
             paused: false,
@@ -178,15 +227,19 @@ io.on('connection', (socket) => {
         ];
 
         Object.keys(players).forEach((id, i) => {
-            gameState.players[id] = {
-                id,
-                name: players[id].name,
-                x: startPositions[i].x,
-                y: startPositions[i].y,
-                score: 0,
-                color: PLAYER_COLORS[i % PLAYER_COLORS.length],
-                vx: 0, vy: 0
-            };
+          gameState.players[id] = {
+              id,
+              name: players[id].name,
+              x: startPositions[i].x,
+              y: startPositions[i].y,
+              score: 0,
+              color: PLAYER_COLORS[i % PLAYER_COLORS.length],
+              vx: 0, vy: 0,
+              speedBoostTime: 0,
+              shieldTime: 0,
+              stunTime: 0,
+              collisionCooldown: 0         
+          };
         });
 
         for (let i = 0; i < 6; i++) spawnResource();
@@ -206,7 +259,7 @@ io.on('connection', (socket) => {
         if (input.left) dx -= MOVE_SPEED;
         if (input.right) dx += MOVE_SPEED;
 
-        const speedMultiplier = player.speedBoostTime > 0 ? 1.6 : 1;
+        const speedMultiplier = player.speedBoostTime > 0 ? 1.65 : 1;
 
         if (dx !== 0 || dy !== 0) {
             const len = Math.sqrt(dx * dx + dy * dy);
@@ -234,11 +287,9 @@ io.on('connection', (socket) => {
 
     socket.on('resume_game', () => {
         if (!gameState.gameRunning || !gameState.players[socket.id] || !gameState.paused) return;
-
         const isPauser = gameState.pausedBy === socket.id;
         const isLeader = players[socket.id]?.isLeader;
-
-        if (!isPauser && !isLeader) return; // Только паузер или лидер
+        if (!isPauser && !isLeader) return;
 
         gameState.paused = false;
         gameState.pausedBy = null;
@@ -251,13 +302,11 @@ io.on('connection', (socket) => {
             const name = players[socket.id].name;
             delete players[socket.id];
             if (gameState.players) delete gameState.players[socket.id];
-
             if (pausedBy === socket.id) {
                 gameState.paused = false;
                 pausedBy = null;
                 io.emit('game_paused', { by: name, paused: false });
             }
-
             io.emit('player_left', { name });
             io.emit('update_lobby', Object.values(players));
         }
@@ -271,24 +320,20 @@ io.on('connection', (socket) => {
             const wasLeader = players[socket.id].isLeader;
             delete players[socket.id];
             if (gameState.players) delete gameState.players[socket.id];
-
             if (pausedBy === socket.id) {
                 gameState.paused = false;
                 pausedBy = null;
                 io.emit('game_paused', { by: leaverName, paused: false });
             }
-
             if (wasLeader && Object.keys(players).length > 0) {
                 players[Object.keys(players)[0]].isLeader = true;
             }
-
             if (Object.keys(players).length === 0) {
                 gameInProgress = false;
                 gameState = {};
                 if (gameInterval) clearInterval(gameInterval);
                 if (resourceSpawnInterval) clearInterval(resourceSpawnInterval);
             }
-
             io.emit('player_left', { name: leaverName });
             io.emit('update_lobby', Object.values(players));
         }
@@ -302,7 +347,6 @@ function getDeltaState() {
         players: gameState.players,
         obstacles: gameState.obstacles,
         resources: gameState.resources,
-        projectiles: gameState.projectiles,
         timer: gameState.timer,
         paused: gameState.paused || false
     };
@@ -323,6 +367,7 @@ function startGameLoop() {
             Object.values(gameState.players || {}).forEach(player => {
                 player.speedBoostTime = Math.max(0, (player.speedBoostTime || 0) - 1);
                 player.shieldTime = Math.max(0, (player.shieldTime || 0) - 1);
+                player.stunTime = Math.max(0, (player.stunTime || 0) - 1);
             });
 
             gameState.timer -= 1 / 30;
@@ -335,7 +380,7 @@ function startGameLoop() {
             gameState.resources && gameState.resources.length < MAX_RESOURCES) {
             spawnResource();
         }
-    }, 4500);
+    }, 4200);
 }
 
 function endGame() {

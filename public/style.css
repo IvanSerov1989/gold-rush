@@ -322,3 +322,13 @@ li {
     letter-spacing: 8px;
     opacity: 0.95;
 }
+
+.player-stun {
+    animation: stun-shake 0.12s infinite alternate;
+    filter: brightness(0.6) saturate(0.5);
+}
+
+@keyframes stun-shake {
+    from { transform: translate3d(-2px, -1px, 0); }
+    to   { transform: translate3d(2px, 1px, 0); }
+}
