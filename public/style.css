@@ -332,3 +332,65 @@ li {
     from { transform: translate3d(-2px, -1px, 0); }
     to   { transform: translate3d(2px, 1px, 0); }
 }
+
+/* === ЧАТ === */
+#chat-panel {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    width: 260px;
+    height: 180px;
+    background: rgba(0, 0, 0, 0.65);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    z-index: 25;
+    overflow: hidden;
+}
+
+#chat-messages {
+    flex: 1;
+    padding: 8px 10px;
+    overflow-y: auto;
+    font-size: 13px;
+    line-height: 1.35;
+    color: #e0e0e0;
+}
+
+#chat-messages .chat-line {
+    margin-bottom: 4px;
+}
+
+#chat-messages .chat-name {
+    font-weight: 700;
+    color: #f1c40f;
+}
+
+#chat-input-area {
+    display: flex;
+    border-top: 1px solid rgba(255,255,255,0.15);
+}
+
+#chat-input {
+    flex: 1;
+    background: #1f2b35;
+    border: none;
+    padding: 8px 10px;
+    color: #fff;
+    font-size: 13px;
+    outline: none;
+}
+
+#chat-send-btn {
+    background: #f39c12;
+    border: none;
+    padding: 0 14px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+#chat-send-btn:hover {
+    background: #e67e22;
+}

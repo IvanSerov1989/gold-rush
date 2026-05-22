@@ -360,6 +360,12 @@ io.on('connection', (socket) => {
         socket.disconnect();
     });
 
+    socket.on('chat_message', ({ name, message }) => {
+      if (!name || !message) return;
+      // Можно добавить простую фильтрацию мата, если хочешь
+      io.emit('chat_message', { name, message });
+    });
+
     socket.on('disconnect', () => {
         console.log(`Отключение: ${socket.id}`);
         if (players[socket.id]) {

@@ -107,6 +107,7 @@ let playerRenderData = {};
 let menuOpen = false;
 let gamePaused = false;
 let gameStartTime = 0;
+let chatOpen = true; // чат всегда видим
 
 document.addEventListener('click', () => {
     if (!audioContext) initAudio();
@@ -385,10 +386,47 @@ function showError(msg) {
     errorMessage.style.display = 'block';
 }
 
+// ==================== ЧАТ ====================
+function sendChatMessage() {
+    const input = document.getElementById('chat-input');
+    const msg = input.value.trim();
+    if (!msg || !myPlayerInfo) return;
+
+    socket.emit('chat_message', {
+        name: myPlayerInfo.name,
+        message: msg
+    });
+    input.value = '';
+}
+
+function addChatMessage(name, message, isMe = false) {
+    const container = document.getElementById('chat-messages');
+    const line = document.createElement('div');
+    line.className = 'chat-line';
+    line.innerHTML = `<span class="chat-name">${name}:</span> ${message}`;
+    if (isMe) line.style.opacity = '0.85';
+    container.appendChild(line);
+    container.scrollTop = container.scrollHeight;
+}
+
 // ==================== КНОПКИ ====================
 restartBtn.addEventListener('click', () => window.location.reload());
 menuResumeBtn.addEventListener('click', () => toggleMenu(false));
 menuLeaveBtn.addEventListener('click', () => socket.emit('leave_game'));
+
+// Чат
+document.getElementById('chat-send-btn').addEventListener('click', sendChatMessage);
+document.getElementById('chat-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        sendChatMessage();
+    }
+});
+
+// Получение сообщений от сервера
+socket.on('chat_message', ({ name, message }) => {
+    const isMe = name === myPlayerInfo?.name;
+    addChatMessage(name, message, isMe);
+});
 
 window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && gameBoard.style.display === 'block' && gameOverScreen.style.display !== 'flex') {
