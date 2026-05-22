@@ -6,6 +6,7 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
+
 const PORT = process.env.PORT || 3000;
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -37,6 +38,21 @@ const OBSTACLES = [
     { id: 'obs5', x: 550, y: 480, width: 120, height: 25, color: '#7f8c8d' }
 ];
 
+// ==================== ЗАЩИТА ПОЗИЦИЙ ====================
+function clampPlayerPosition(player) {
+    if (!player) return;
+    if (isNaN(player.x) || isNaN(player.y) || !isFinite(player.x) || !isFinite(player.y)) {
+        console.warn(`[FIX] NaN position for ${player.name || 'unknown'}. Resetting.`);
+        player.x = 400;
+        player.y = 300;
+        player.vx = 0;
+        player.vy = 0;
+        return;
+    }
+    player.x = Math.max(PLAYER_RADIUS, Math.min(BOARD_WIDTH - PLAYER_RADIUS, player.x));
+    player.y = Math.max(PLAYER_RADIUS, Math.min(BOARD_HEIGHT - PLAYER_RADIUS, player.y));
+}
+
 // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 function generateResourceId() {
     return 'res_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
@@ -48,7 +64,6 @@ function spawnResource() {
 
     let x, y, attempts = 0;
     const margin = 30;
-
     do {
         x = margin + Math.random() * (BOARD_WIDTH - 2 * margin);
         y = margin + Math.random() * (BOARD_HEIGHT - 2 * margin);
@@ -86,19 +101,20 @@ function isTooCloseToOtherResource(x, y, minDist = 35) {
     });
 }
 
+// ==================== СТОЛКНОВЕНИЯ ====================
 function checkCollisions() {
     if (!gameState.players || !gameState.resources) return;
 
-    // Пропускаем игроков с cooldown
+    // Глобальная защита
     Object.keys(gameState.players).forEach(id => {
         const p = gameState.players[id];
-        if (p.collisionCooldown > 0) {
-            p.collisionCooldown--;
-        }
+        if (p.collisionCooldown > 0) p.collisionCooldown--;
+        clampPlayerPosition(p);
     });
 
-   // === 1. Столкновения игроков (улучшенная версия) ===
-    const ids = Object.keys(gameState.players);
+    // === СИММЕТРИЧНЫЕ СТОЛКНОВЕНИЯ ИГРОКОВ (ИСПРАВЛЕНО) ===
+    const ids = Object.keys(gameState.players).sort();
+
     for (let i = 0; i < ids.length; i++) {
         for (let j = i + 1; j < ids.length; j++) {
             const p1 = gameState.players[ids[i]];
@@ -109,45 +125,65 @@ function checkCollisions() {
             const dy = p1.y - p2.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
 
-            if (dist < PLAYER_RADIUS * 2 && dist > 0) {
-                const overlap = (PLAYER_RADIUS * 2 - dist) / 2;
-                
-                // УСИЛЕННЫЙ толчок
-                const pushX = (dx / dist) * overlap * 1.8;
-                const pushY = (dy / dist) * overlap * 1.8;
+            if (dist < PLAYER_RADIUS * 2 && dist > 0.1) {
+                const nx = dx / dist;
+                const ny = dy / dist;
 
-                p1.x += pushX;
-                p1.y += pushY;
-                p2.x -= pushX;
-                p2.y -= pushY;
+                // Симметричное отталкивание (оба игрока двигаются одинаково)
+                const overlap = (PLAYER_RADIUS * 2 - dist) / 2 + 2.5;
 
-                // Стан + защита от повторного столкновения
-                const speed1 = Math.sqrt((p1.vx || 0) ** 2 + (p1.vy || 0) ** 2);
-                const speed2 = Math.sqrt((p2.vx || 0) ** 2 + (p2.vy || 0) ** 2);
+                p1.x += nx * overlap;
+                p1.y += ny * overlap;
+                p2.x -= nx * overlap;
+                p2.y -= ny * overlap;
 
-                if (speed1 > 3.5 && !p1.shieldTime) {
-                    p1.stunTime = 35;
-                    p1.collisionCooldown = 8; // защита на 8 тиков (~0.27 сек)
-                }
-                if (speed2 > 3.5 && !p2.shieldTime) {
-                    p2.stunTime = 35;
-                    p2.collisionCooldown = 8;
+                clampPlayerPosition(p1);
+                clampPlayerPosition(p2);
+
+                p1.vx = 0;
+                p1.vy = 0;
+                p2.vx = 0;
+                p2.vy = 0;
+
+                // Стан при высокой скорости (таран)
+                const speed1 = Math.hypot(p1.vx || 0, p1.vy || 0);
+                const speed2 = Math.hypot(p2.vx || 0, p2.vy || 0);
+                const relSpeed = speed1 + speed2;
+
+                if (relSpeed > 4.2) {
+                    if (!p1.shieldTime && p1.collisionCooldown === 0) {
+                        p1.stunTime = 26;
+                        p1.collisionCooldown = 14;
+                    }
+                    if (!p2.shieldTime && p2.collisionCooldown === 0) {
+                        p2.stunTime = 26;
+                        p2.collisionCooldown = 14;
+                    }
                 }
             }
         }
     }
 
-    // === 2. Столкновения с препятствиями + сбор ресурсов ===
+    // Дополнительная защита от застревания в углу
+    Object.keys(gameState.players).forEach(id => {
+        const p = gameState.players[id];
+        if (p) clampPlayerPosition(p);
+    });
+
+    // === ПРЕПЯТСТВИЯ + СБОР РЕСУРСОВ ===
     Object.keys(gameState.players).forEach(playerId => {
         const player = gameState.players[playerId];
         if (!player) return;
 
-        // Столкновения с препятствиями
+        clampPlayerPosition(player);
+
+        // Препятствия
         OBSTACLES.forEach(obs => {
             const halfW = (obs.width || 40) / 2;
             const halfH = (obs.height || 40) / 2;
             const closestX = Math.max(obs.x - halfW, Math.min(player.x, obs.x + halfW));
             const closestY = Math.max(obs.y - halfH, Math.min(player.y, obs.y + halfH));
+
             const dx = player.x - closestX;
             const dy = player.y - closestY;
             const distSq = dx * dx + dy * dy;
@@ -157,8 +193,7 @@ function checkCollisions() {
                 const overlap = PLAYER_RADIUS - dist;
                 player.x += (dx / dist) * overlap * 1.1;
                 player.y += (dy / dist) * overlap * 1.1;
-                player.x = Math.max(PLAYER_RADIUS, Math.min(BOARD_WIDTH - PLAYER_RADIUS, player.x));
-                player.y = Math.max(PLAYER_RADIUS, Math.min(BOARD_HEIGHT - PLAYER_RADIUS, player.y));
+                clampPlayerPosition(player);
             }
         });
 
@@ -201,6 +236,7 @@ io.on('connection', (socket) => {
 
         const isLeader = Object.keys(players).length === 0;
         players[socket.id] = { id: socket.id, name: username, isLeader };
+
         socket.emit('join_success', players[socket.id]);
         io.emit('update_lobby', Object.values(players));
     });
@@ -227,19 +263,19 @@ io.on('connection', (socket) => {
         ];
 
         Object.keys(players).forEach((id, i) => {
-          gameState.players[id] = {
-              id,
-              name: players[id].name,
-              x: startPositions[i].x,
-              y: startPositions[i].y,
-              score: 0,
-              color: PLAYER_COLORS[i % PLAYER_COLORS.length],
-              vx: 0, vy: 0,
-              speedBoostTime: 0,
-              shieldTime: 0,
-              stunTime: 0,
-              collisionCooldown: 0         
-          };
+            gameState.players[id] = {
+                id,
+                name: players[id].name,
+                x: startPositions[i].x,
+                y: startPositions[i].y,
+                score: 0,
+                color: PLAYER_COLORS[i % PLAYER_COLORS.length],
+                vx: 0, vy: 0,
+                speedBoostTime: 0,
+                shieldTime: 0,
+                stunTime: 0,
+                collisionCooldown: 0
+            };
         });
 
         for (let i = 0; i < 6; i++) spawnResource();
@@ -252,8 +288,15 @@ io.on('connection', (socket) => {
         if (!gameState.gameRunning || !gameState.players[socket.id] || gameState.paused) return;
 
         const player = gameState.players[socket.id];
-        let dx = 0, dy = 0;
 
+        // Пока в стане — не даём двигаться
+        if (player.stunTime > 0) {
+            player.vx = 0;
+            player.vy = 0;
+            return;
+        }
+
+        let dx = 0, dy = 0;
         if (input.up) dy -= MOVE_SPEED;
         if (input.down) dy += MOVE_SPEED;
         if (input.left) dx -= MOVE_SPEED;
@@ -265,10 +308,12 @@ io.on('connection', (socket) => {
             const len = Math.sqrt(dx * dx + dy * dy);
             dx = (dx / len) * MOVE_SPEED * speedMultiplier;
             dy = (dy / len) * MOVE_SPEED * speedMultiplier;
+
             player.x += dx;
             player.y += dy;
             player.vx = dx;
             player.vy = dy;
+
             player.x = Math.max(PLAYER_RADIUS, Math.min(BOARD_WIDTH - PLAYER_RADIUS, player.x));
             player.y = Math.max(PLAYER_RADIUS, Math.min(BOARD_HEIGHT - PLAYER_RADIUS, player.y));
         } else {
@@ -302,11 +347,13 @@ io.on('connection', (socket) => {
             const name = players[socket.id].name;
             delete players[socket.id];
             if (gameState.players) delete gameState.players[socket.id];
+
             if (pausedBy === socket.id) {
                 gameState.paused = false;
                 pausedBy = null;
                 io.emit('game_paused', { by: name, paused: false });
             }
+
             io.emit('player_left', { name });
             io.emit('update_lobby', Object.values(players));
         }
@@ -318,22 +365,27 @@ io.on('connection', (socket) => {
         if (players[socket.id]) {
             const leaverName = players[socket.id].name;
             const wasLeader = players[socket.id].isLeader;
+
             delete players[socket.id];
             if (gameState.players) delete gameState.players[socket.id];
+
             if (pausedBy === socket.id) {
                 gameState.paused = false;
                 pausedBy = null;
                 io.emit('game_paused', { by: leaverName, paused: false });
             }
+
             if (wasLeader && Object.keys(players).length > 0) {
                 players[Object.keys(players)[0]].isLeader = true;
             }
+
             if (Object.keys(players).length === 0) {
                 gameInProgress = false;
                 gameState = {};
                 if (gameInterval) clearInterval(gameInterval);
                 if (resourceSpawnInterval) clearInterval(resourceSpawnInterval);
             }
+
             io.emit('player_left', { name: leaverName });
             io.emit('update_lobby', Object.values(players));
         }
@@ -360,7 +412,10 @@ function startGameLoop() {
         if (!gameState.gameRunning) return;
 
         checkCollisions();
+
         const delta = getDeltaState();
+        Object.values(gameState.players || {}).forEach(p => clampPlayerPosition(p));
+
         if (delta) io.emit('game_state_update', delta);
 
         if (!gameState.paused) {
