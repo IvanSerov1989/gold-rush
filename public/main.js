@@ -78,6 +78,7 @@ function playSound(type) {
 const joinScreen = document.getElementById('join-screen');
 const lobbyScreen = document.getElementById('lobby-screen');
 const gameBoard = document.getElementById('game-board');
+const gameWrapper = document.getElementById('game-wrapper');
 const usernameInput = document.getElementById('username-input');
 const joinBtn = document.getElementById('join-btn');
 const errorMessage = document.getElementById('error-message');
