@@ -87,6 +87,7 @@ const startGameBtn = document.getElementById('start-game-btn');
 const waitingMessage = document.getElementById('waiting-message');
 const timerDisplay = document.getElementById('timer');
 const scoreList = document.getElementById('score-list');
+const sidebarPlayerCount = document.getElementById('sidebar-player-count');
 const gameOverScreen = document.getElementById('game-over-screen');
 const winnerText = document.getElementById('winner-text');
 const restartBtn = document.getElementById('restart-btn');
@@ -107,7 +108,7 @@ let playerRenderData = {};
 let menuOpen = false;
 let gamePaused = false;
 let gameStartTime = 0;
-let chatOpen = true; // чат всегда видим
+let chatOpen = true;
 
 document.addEventListener('click', () => {
     if (!audioContext) initAudio();
@@ -360,12 +361,20 @@ function updateHud(state) {
         .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
 
     scoreList.innerHTML = '';
-    entries.forEach(player => {
-        const item = document.createElement('li');
-        item.textContent = `${player.name}: ${player.score}`;
-        if (player.id === socket.id) item.className = 'me-score';
-        scoreList.appendChild(item);
+    entries.forEach((player, index) => {
+      const item = document.createElement('li');
+      item.innerHTML = `
+          <span class="rank">${index + 1}</span>
+          <span class="color-dot" style="background-color: ${player.color}"></span>
+          <span class="player-name">${player.name}</span>
+          <span class="score">${player.score}</span>
+      `;
+      if (player.id === socket.id) item.className = 'me-score';
+      scoreList.appendChild(item);
     });
+
+    // Обновляем счётчик в сайдбаре
+    if (sidebarPlayerCount) sidebarPlayerCount.textContent = entries.length;
 }
 
 function showGameOver(state) {
@@ -429,7 +438,7 @@ socket.on('chat_message', ({ name, message }) => {
 });
 
 window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && gameBoard.style.display === 'block' && gameOverScreen.style.display !== 'flex') {
+    if (e.key === 'Escape' && gameWrapper.style.display === 'flex' && gameOverScreen.style.display !== 'flex') {
         toggleMenu(!menuOpen);
         e.preventDefault();
     }
@@ -483,7 +492,7 @@ socket.on('update_lobby', (players) => {
 // ==================== СТАРТ ИГРЫ ====================
 socket.on('game_started', () => {
     lobbyScreen.style.display = 'none';
-    gameBoard.style.display = 'block';
+    gameWrapper.style.display = 'flex';
     inGameMenu.style.display = 'none';
     menuOpen = false;
     gamePaused = false;

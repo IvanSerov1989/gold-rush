@@ -9,13 +9,11 @@
 <body>
     <div id="game-container">
       <h1>Золотая Лихорадка</h1>
-
       <div id="join-screen">
           <input type="text" id="username-input" placeholder="Введите никнейм" maxlength="15">
           <button id="join-btn">Присоединиться</button>
           <p id="error-message" style="color: #ff6b6b; display: none;"></p>
       </div>
-
       <div id="lobby-screen" style="display: none;">
           <h2>Лобби ожидания (<span id="players-count">0</span>/4)</h2>
           <ul id="players-list"></ul>
@@ -23,47 +21,58 @@
           <p id="waiting-message">Ожидаем лидера для старта...</p>
       </div>
 
-      <div id="game-board" style="display: none;">
-          <div id="hud">
-              <div id="timer" class="hud-card">Время: <span>00:00</span></div>
-              <div id="leaderboard" class="hud-card">
-                  <h3>Таблица</h3>
-                  <ul id="score-list"></ul>
+      <!-- НОВЫЙ БЛОК: ИГРОВОЕ ПОЛЕ + БОКОВАЯ ТАБЛИЦА -->
+      <div id="game-wrapper" style="display: none; flex-direction: row; gap: 16px; align-items: flex-start; justify-content: center;">
+          
+          <!-- Игровое поле (800x600) -->
+          <div id="game-board">
+              <div id="hud">
+                  <div id="timer" class="hud-card">Время: <span>03:00</span></div>
+              </div>
+              <div id="pause-overlay" style="display: none;">
+                <div class="pause-text">ПАУЗА</div>
+              </div>
+              <div id="game-over-screen" style="display: none;">
+                  <div class="game-over-box">
+                      <h2>Игра окончена</h2>
+                      <p id="winner-text">Победитель: —</p>
+                      <button id="restart-btn">Вернуться в лобби</button>
+                  </div>
+              </div>
+              <div id="in-game-menu" class="menu-overlay" style="display: none;">
+                  <div class="menu-box">
+                      <h2>Меню игры</h2>
+                      <p id="menu-status">Игра приостановлена</p>
+                      <button id="menu-resume-btn">Продолжить</button>
+                      <button id="menu-leave-btn">Выйти в лобби</button>
+                      <p class="menu-hint">Нажмите Esc для открытия/закрытия</p>
+                  </div>
+              </div>
+              <div id="notification-toast" class="notification-toast" style="display: none;"></div>
+              
+              <!-- ЧАТ -->
+              <div id="chat-panel">
+                  <div id="chat-messages"></div>
+                  <div id="chat-input-area">
+                      <input type="text" id="chat-input" placeholder="Напиши сообщение..." maxlength="80">
+                      <button id="chat-send-btn">Отправить</button>
+                  </div>
               </div>
           </div>
-          <div id="pause-overlay" style="display: none;">
-            <div class="pause-text">ПАУЗА</div>
-          </div>
-          <div id="game-over-screen" style="display: none;">
-              <div class="game-over-box">
-                  <h2>Игра окончена</h2>
-                  <p id="winner-text">Победитель: —</p>
-                  <button id="restart-btn">Вернуться в лобби</button>
-              </div>
-          </div>
-          <div id="in-game-menu" class="menu-overlay" style="display: none;">
-              <div class="menu-box">
-                  <h2>Меню игры</h2>
-                  <p id="menu-status">Игра приостановлена</p>
-                  <button id="menu-resume-btn">Продолжить</button>
-                  <button id="menu-leave-btn">Выйти в лобби</button>
-                  <p class="menu-hint">Нажмите Esc для открытия/закрытия</p>
-              </div>
-          </div>
-          <div id="notification-toast" class="notification-toast" style="display: none;"></div>
 
-          <!-- ЧАТ -->
-          <div id="chat-panel">
-              <div id="chat-messages"></div>
-              <div id="chat-input-area">
-                  <input type="text" id="chat-input" placeholder="Напиши сообщение..." maxlength="80">
-                  <button id="chat-send-btn">Отправить</button>
+          <!-- БОКОВАЯ ТАБЛИЦА ЛИДЕРОВ (решение проблемы!) -->
+          <div id="leaderboard-sidebar">
+              <div class="leaderboard-header">
+                  <h3>Таблица лидеров</h3>
+                  <div class="player-count-badge"><span id="sidebar-player-count">0</span>/4</div>
+              </div>
+              <ul id="score-list"></ul>
+              <div class="leaderboard-footer">
+                  <small>Собирай золото и power-up'ы!</small>
               </div>
           </div>
-
-      </div> 
-    </div> 
-
+      </div>
+    </div>
     <script src="/socket.io/socket.io.js"></script>
     <script src="main.js"></script>
 </body>

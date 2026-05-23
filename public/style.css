@@ -394,3 +394,118 @@ li {
 #chat-send-btn:hover {
     background: #e67e22;
 }
+
+/* ==================== БОКОВАЯ ТАБЛИЦА (НОВОЕ РЕШЕНИЕ) ==================== */
+#game-wrapper {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+}
+
+#leaderboard-sidebar {
+    width: 210px;
+    height: 600px;
+    background: #1f2b35;
+    border: 3px solid #34495e;
+    border-radius: 12px;
+    box-shadow: 0 10px 35px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.leaderboard-header {
+    background: #2c3e50;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #34495e;
+}
+
+.leaderboard-header h3 {
+    margin: 0;
+    font-size: 15px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #f1c40f;
+}
+
+.player-count-badge {
+    background: #34495e;
+    color: #f1c40f;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 999px;
+}
+
+#score-list {
+    flex: 1;
+    margin: 0;
+    padding: 8px 12px;
+    overflow-y: auto;
+    font-size: 14px;
+}
+
+#score-list li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    margin: 5px 0;
+    background: #2c3e50;
+    border-radius: 8px;
+    font-weight: 600;
+}
+
+#score-list li.me-score {
+    background: #3d5a73;
+    border: 2px solid #f39c12;
+}
+
+#score-list li .rank {
+    font-size: 13px;
+    font-weight: 800;
+    width: 22px;
+    text-align: center;
+    color: #f1c40f;
+}
+
+#score-list li .color-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    flex-shrink: 0;
+}
+
+#score-list li .player-name {
+    flex: 1;
+    font-size: 13.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#score-list li .score {
+    font-weight: 800;
+    color: #f1c40f;
+    font-size: 15px;
+    min-width: 38px;
+    text-align: right;
+}
+
+.leaderboard-footer {
+    padding: 10px 14px;
+    background: #2c3e50;
+    text-align: center;
+    border-top: 1px solid #34495e;
+}
+.leaderboard-footer small {
+    color: #7f8c8d;
+    font-size: 11px;
+}
+
+/* Скрываем старый #leaderboard (если остался) */
+#leaderboard { display: none !important; }
