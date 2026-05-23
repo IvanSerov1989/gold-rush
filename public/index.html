@@ -21,13 +21,12 @@
           <p id="waiting-message">Ожидаем лидера для старта...</p>
       </div>
 
-      <!-- НОВЫЙ БЛОК: ИГРОВОЕ ПОЛЕ + БОКОВАЯ ТАБЛИЦА -->
       <div id="game-wrapper" style="display: none; flex-direction: row; gap: 16px; align-items: flex-start; justify-content: center;">
           
-          <!-- Игровое поле (800x600) -->
+          <!-- Игровое поле -->
           <div id="game-board">
               <div id="hud">
-                  <div id="timer" class="hud-card">Время: <span>03:00</span></div>
+                  <div id="timer">03:00</div>
               </div>
               <div id="pause-overlay" style="display: none;">
                 <div class="pause-text">ПАУЗА</div>
@@ -49,26 +48,29 @@
                   </div>
               </div>
               <div id="notification-toast" class="notification-toast" style="display: none;"></div>
-              
-              <!-- ЧАТ -->
+          </div>
+
+          <!-- ПРАВАЯ КОЛОНКА: ТАБЛИЦА + ЧАТ -->
+          <div id="right-panel">
+              <!-- Таблица лидеров -->
+              <div id="leaderboard-sidebar">
+                  <div class="leaderboard-header">
+                      <h3>Таблица лидеров</h3>
+                      <div class="player-count-badge"><span id="sidebar-player-count">0</span>/4</div>
+                  </div>
+                  <ul id="score-list"></ul>
+                  <div class="leaderboard-footer">
+                      <small>Собирай золото и power-up'ы!</small>
+                  </div>
+              </div>
+
+              <!-- ЧАТ ПОД ТАБЛИЦЕЙ -->
               <div id="chat-panel">
                   <div id="chat-messages"></div>
                   <div id="chat-input-area">
                       <input type="text" id="chat-input" placeholder="Напиши сообщение..." maxlength="80">
                       <button id="chat-send-btn">Отправить</button>
                   </div>
-              </div>
-          </div>
-
-          <!-- БОКОВАЯ ТАБЛИЦА ЛИДЕРОВ (решение проблемы!) -->
-          <div id="leaderboard-sidebar">
-              <div class="leaderboard-header">
-                  <h3>Таблица лидеров</h3>
-                  <div class="player-count-badge"><span id="sidebar-player-count">0</span>/4</div>
-              </div>
-              <ul id="score-list"></ul>
-              <div class="leaderboard-footer">
-                  <small>Собирай золото и power-up'ы!</small>
               </div>
           </div>
       </div>
