@@ -11,7 +11,7 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ==================== КОНСТАНТЫ ====================
+// ==================== CONSTANTS ====================
 const MAX_PLAYERS = 4;
 const PLAYER_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f'];
 const MOVE_SPEED = 5;
@@ -22,7 +22,7 @@ const RESOURCE_SIZE = 14;
 const RESOURCE_VALUE = 10;
 const MAX_RESOURCES = 8;
 
-// ==================== ИГРОВОЕ СОСТОЯНИЕ ====================
+// ==================== GAME STATE ====================
 let players = {};
 let gameState = {};
 let gameInProgress = false;
@@ -38,7 +38,7 @@ const OBSTACLES = [
     { id: 'obs5', x: 550, y: 480, width: 120, height: 25, color: '#7f8c8d' }
 ];
 
-// ==================== ЗАЩИТА ПОЗИЦИЙ ====================
+// ==================== POSITION PROTECTION ====================
 function clampPlayerPosition(player) {
     if (!player) return;
     if (isNaN(player.x) || isNaN(player.y) || !isFinite(player.x) || !isFinite(player.y)) {
@@ -53,7 +53,7 @@ function clampPlayerPosition(player) {
     player.y = Math.max(PLAYER_RADIUS, Math.min(BOARD_HEIGHT - PLAYER_RADIUS, player.y));
 }
 
-// ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
+// ==================== HELPER FUNCTIONS ====================
 function generateResourceId() {
     return 'res_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
 }
@@ -101,18 +101,18 @@ function isTooCloseToOtherResource(x, y, minDist = 35) {
     });
 }
 
-// ==================== СТОЛКНОВЕНИЯ ====================
+// ==================== COLLISIONS ====================
 function checkCollisions() {
     if (!gameState.players || !gameState.resources) return;
 
-    // Глобальная защита
+    // Global protection
     Object.keys(gameState.players).forEach(id => {
         const p = gameState.players[id];
         if (p.collisionCooldown > 0) p.collisionCooldown--;
         clampPlayerPosition(p);
     });
 
-    // === СИММЕТРИЧНЫЕ СТОЛКНОВЕНИЯ ИГРОКОВ (ИСПРАВЛЕНО) ===
+    // === SYMMETRICAL PLAYER COLLISIONS (FIXED) ===
     const ids = Object.keys(gameState.players).sort();
 
     for (let i = 0; i < ids.length; i++) {
@@ -129,7 +129,7 @@ function checkCollisions() {
                 const nx = dx / dist;
                 const ny = dy / dist;
 
-                // Симметричное отталкивание (оба игрока двигаются одинаково)
+                // Symmetrical repulsion (both players move equally)
                 const overlap = (PLAYER_RADIUS * 2 - dist) / 2 + 2.5;
 
                 p1.x += nx * overlap;
@@ -145,7 +145,7 @@ function checkCollisions() {
                 p2.vx = 0;
                 p2.vy = 0;
 
-                // Стан при высокой скорости (таран)
+                // Stun on high speed (ram)
                 const speed1 = Math.hypot(p1.vx || 0, p1.vy || 0);
                 const speed2 = Math.hypot(p2.vx || 0, p2.vy || 0);
                 const relSpeed = speed1 + speed2;
@@ -164,20 +164,20 @@ function checkCollisions() {
         }
     }
 
-    // Дополнительная защита от застревания в углу
+    // Additional protection from getting stuck in corners
     Object.keys(gameState.players).forEach(id => {
         const p = gameState.players[id];
         if (p) clampPlayerPosition(p);
     });
 
-    // === ПРЕПЯТСТВИЯ + СБОР РЕСУРСОВ ===
+    // === OBSTACLES + RESOURCE COLLECTION ===
     Object.keys(gameState.players).forEach(playerId => {
         const player = gameState.players[playerId];
         if (!player) return;
 
         clampPlayerPosition(player);
 
-        // Препятствия
+        // Obstacles
         OBSTACLES.forEach(obs => {
             const halfW = (obs.width || 40) / 2;
             const halfH = (obs.height || 40) / 2;
@@ -197,7 +197,7 @@ function checkCollisions() {
             }
         });
 
-        // Сбор ресурсов
+        // Resource collection
         for (let i = gameState.resources.length - 1; i >= 0; i--) {
             const res = gameState.resources[i];
             const dx = player.x - res.x;
@@ -230,9 +230,9 @@ io.on('connection', (socket) => {
     console.log(`Connection: ${socket.id}`);
 
     socket.on('join_game', (username) => {
-        if (gameInProgress) return socket.emit('join_error', 'Игра уже началась!');
-        if (Object.keys(players).length >= MAX_PLAYERS) return socket.emit('join_error', 'Лобби заполнено!');
-        if (Object.values(players).some(p => p.name === username)) return socket.emit('join_error', 'Имя занято!');
+        if (gameInProgress) return socket.emit('join_error', 'Game already started!');
+        if (Object.keys(players).length >= MAX_PLAYERS) return socket.emit('join_error', 'Lobby is full!');
+        if (Object.values(players).some(p => p.name === username)) return socket.emit('join_error', 'Name is taken!');
 
         const isLeader = Object.keys(players).length === 0;
         players[socket.id] = { id: socket.id, name: username, isLeader };
@@ -289,7 +289,7 @@ io.on('connection', (socket) => {
 
         const player = gameState.players[socket.id];
 
-        // Пока в стане — не даём двигаться
+        // While stunned, movement is disabled.
         if (player.stunTime > 0) {
             player.vx = 0;
             player.vy = 0;
@@ -362,7 +362,7 @@ io.on('connection', (socket) => {
 
     socket.on('chat_message', ({ name, message }) => {
       if (!name || !message) return;
-      // Можно добавить простую фильтрацию мата, если хочешь
+      // You can add a simple profanity filter if you want.
       io.emit('chat_message', { name, message });
     });
 
@@ -398,7 +398,7 @@ io.on('connection', (socket) => {
     });
 });
 
-// ==================== СЕРВЕРНЫЙ ЦИКЛ ====================
+// ==================== SERVER LOOP ====================
 function getDeltaState() {
     if (!gameState.gameRunning) return null;
     return {

@@ -1,6 +1,6 @@
 const socket = io();
 
-// ==================== ЗВУКОВОЙ МЕНЕДЖЕР ====================
+// ==================== AUDIO MANAGER ====================
 let audioContext;
 function initAudio() {
     if (!audioContext) {
@@ -74,7 +74,7 @@ function playSound(type) {
     setTimeout(() => osc.stop(), 2000);
 }
 
-// ==================== DOM ЭЛЕМЕНТЫ ====================
+// ==================== DOM ELEMENTS ====================
 const joinScreen = document.getElementById('join-screen');
 const lobbyScreen = document.getElementById('lobby-screen');
 const gameBoard = document.getElementById('game-board');
@@ -115,7 +115,7 @@ document.addEventListener('click', () => {
     if (!audioContext) initAudio();
 }, { once: true });
 
-// ==================== КЛАВИАТУРА ====================
+// ==================== KEYBOARD ====================
 const keys = {};
 window.addEventListener('keydown', (e) => { keys[e.key.toLowerCase()] = true; });
 window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
@@ -138,7 +138,7 @@ function sendInput() {
     lastInputTime = now;
 }
 
-// ==================== SOCKET СОБЫТИЯ ====================
+// ==================== SOCKET EVENTS ====================
 socket.on('game_state_update', (state) => {
     const now = performance.now();
     if (state.players) {
@@ -165,25 +165,25 @@ socket.on('game_state_update', (state) => {
 
 socket.on('game_paused', ({ by, paused }) => {
     gamePaused = paused;
-    menuStatus.textContent = paused ? `Пауза: ${by}` : 'Игра продолжается';
-    showNotification(paused ? `${by} приостановил игру` : `${by} продолжил игру`);
+    menuStatus.textContent = paused ? `Pause: ${by}` : 'Game is running';
+    showNotification(paused ? `${by} paused the game` : `${by} resumed the game`);
     if (paused && !menuOpen) {
         inGameMenu.style.display = 'flex';
         menuOpen = true;
     }
 });
 
-socket.on('player_left', ({ name }) => showNotification(`${name} вышел из игры`));
+socket.on('player_left', ({ name }) => showNotification(`${name} left the game`));
 
 socket.on('resource_collected', ({ by, type }) => {
-    const labels = { gold: 'золото', speed: 'ускорение', shield: 'щит' };
-    showNotification(`${by} взял ${labels[type] || type}`);
+    const labels = { gold: 'gold', speed: 'speed', shield: 'shield' };
+    showNotification(`${by} collected ${labels[type] || type}`);
     if (type === 'gold') playSound('coin');
     else if (type === 'speed') playSound('power');
     else if (type === 'shield') playSound('shield');
 });
 
-// ==================== ГЛАВНЫЙ ИГРОВОЙ ЦИКЛ ====================
+// ==================== MAIN GAME LOOP ====================
 function startClientGameLoop() {
     gameStartTime = performance.now();
 
@@ -209,7 +209,7 @@ function startClientGameLoop() {
             sendInput();
         }
 
-        // === ИГРОКИ ===
+        // === PLAYERS ===
         Object.keys(currentGameState.players).forEach(id => {
             const p = currentGameState.players[id];
             if (!playerElements[id]) {
@@ -229,7 +229,7 @@ function startClientGameLoop() {
             const renderInfo = playerRenderData[id];
             let x = p.x, y = p.y;
 
-            // Если игрок в стане — НЕ интерполируем (чтобы не было телепортов)
+            // If the player is stunned, do NOT interpolate (to prevent teleporting).
             if (renderInfo && p.stunTime <= 0) {
                 const interval = Math.max(16, renderInfo.nextTime - renderInfo.prevTime);
                 let t = (now - renderInfo.prevTime) / interval;
@@ -256,7 +256,7 @@ function startClientGameLoop() {
             el.classList.toggle('player-stun', p.stunTime > 0);
         });
 
-        // === ПРЕПЯТСТВИЯ ===
+        // === OBSTACLES ===
         if (currentGameState.obstacles) {
             currentGameState.obstacles.forEach(obs => {
                 if (!obstacleElements[obs.id]) {
@@ -275,7 +275,7 @@ function startClientGameLoop() {
             });
         }
 
-        // === РЕСУРСЫ ===
+        // === RESOURCES ===
         if (currentGameState.resources) {
             const activeIds = new Set(currentGameState.resources.map(r => r.id));
 
@@ -283,7 +283,7 @@ function startClientGameLoop() {
                 if (!resourceElements[res.id]) {
                     const d = document.createElement('div');
                     d.className = `resource resource-${res.type}`;
-                    d.title = res.type === 'gold' ? 'Золото' : res.type === 'speed' ? 'Ускорение' : 'Щит';
+                    d.title = res.type === 'gold' ? 'Gold' : res.type === 'speed' ? 'Speed' : 'Shield';
                     gameBoard.appendChild(d);
                     resourceElements[res.id] = d;
                 }
@@ -303,7 +303,7 @@ function startClientGameLoop() {
             });
         }
 
-        // === ОЧИСТКА УДАЛЁННЫХ ИГРОКОВ ===
+        // === CLEANUP REMOVED PLAYERS ===
         Object.keys(playerElements).forEach(id => {
             if (!currentGameState.players[id]) {
                 playerElements[id].remove();
@@ -317,7 +317,7 @@ function startClientGameLoop() {
     gameLoop();
 }
 
-// ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
+// ==================== HELPER FUNCTIONS ====================
 function toggleMenu(open) {
     menuOpen = open;
     inGameMenu.style.display = open ? 'flex' : 'none';
@@ -374,7 +374,7 @@ function updateHud(state) {
       scoreList.appendChild(item);
     });
 
-    // Обновляем счётчик в сайдбаре
+    // Update the player count in the sidebar
     if (sidebarPlayerCount) sidebarPlayerCount.textContent = entries.length;
 }
 
@@ -385,8 +385,8 @@ function showGameOver(state) {
         .sort((a, b) => b.score - a.score)[0];
 
     winnerText.textContent = winner
-        ? `Победитель: ${winner.name} (${winner.score})`
-        : 'Игра окончена';
+        ? `Winner: ${winner.name} (${winner.score})`
+        : 'Game Over';
 
     gameOverScreen.style.display = 'flex';
 }
@@ -396,7 +396,7 @@ function showError(msg) {
     errorMessage.style.display = 'block';
 }
 
-// ==================== ЧАТ ====================
+// ==================== CHAT ====================
 function sendChatMessage() {
     const input = document.getElementById('chat-input');
     const msg = input.value.trim();
@@ -419,12 +419,12 @@ function addChatMessage(name, message, isMe = false) {
     container.scrollTop = container.scrollHeight;
 }
 
-// ==================== КНОПКИ ====================
+// ==================== BUTTONS ====================
 restartBtn.addEventListener('click', () => window.location.reload());
 menuResumeBtn.addEventListener('click', () => toggleMenu(false));
 menuLeaveBtn.addEventListener('click', () => socket.emit('leave_game'));
 
-// Чат
+// Chat
 document.getElementById('chat-send-btn').addEventListener('click', sendChatMessage);
 document.getElementById('chat-input').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
@@ -432,7 +432,7 @@ document.getElementById('chat-input').addEventListener('keydown', (e) => {
     }
 });
 
-// Получение сообщений от сервера
+// Receiving messages from the server
 socket.on('chat_message', ({ name, message }) => {
     const isMe = name === myPlayerInfo?.name;
     addChatMessage(name, message, isMe);
@@ -445,10 +445,10 @@ window.addEventListener('keydown', (e) => {
     }
 });
 
-// ==================== ЛОББИ ====================
+// ==================== LOBBY ====================
 joinBtn.addEventListener('click', () => {
     const username = usernameInput.value.trim();
-    if (username.length < 2) return showError('Имя минимум 2 символа');
+    if (username.length < 2) return showError('Name must be at least 2 characters long');
     socket.emit('join_game', username);
 });
 
@@ -472,7 +472,7 @@ socket.on('update_lobby', (players) => {
 
         if (player.isLeader) {
             const badge = document.createElement('span');
-            badge.textContent = '👑 Лидер';
+            badge.textContent = '👑 Leader';
             badge.className = 'leader-badge';
             li.appendChild(badge);
         }
@@ -490,7 +490,7 @@ socket.on('update_lobby', (players) => {
     }
 });
 
-// ==================== СТАРТ ИГРЫ ====================
+// ==================== GAME STARTED ====================
 socket.on('game_started', () => {
     lobbyScreen.style.display = 'none';
     gameWrapper.style.display = 'flex';

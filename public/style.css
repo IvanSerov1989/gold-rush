@@ -30,7 +30,7 @@ h1 {
     background-color: #2c3e50;
     border: 4px solid #34495e;
     border-radius: 8px;
-    position: relative; /* Важно для абсолютного позиционирования объектов внутри */
+    position: relative; /* Important for absolute positioning of objects inside*/
     box-shadow: 0 10px 30px rgba(0,0,0,0.5);
 }
 
@@ -85,7 +85,7 @@ li {
     font-size: 12px;
 }
 
-/* Игроки */
+/* Players */
 .player {
     position: absolute;
     width: 40px;
@@ -93,12 +93,12 @@ li {
     border-radius: 50%;
     border: 3px solid #fff;
     box-shadow: 0 0 10px rgba(0,0,0,0.5);
-    transition: none; /* Важно! Без transition для 60 FPS */
-    will-change: transform; /* Оптимизация */
+    transition: none; /* Important! Without transition for 60 FPS */
+    will-change: transform; /* Optimization */
     z-index: 10;
 }
 
-/* Имя над игроком */
+/* Name above player */
 .player-name {
     position: absolute;
     top: -22px;
@@ -112,7 +112,7 @@ li {
     pointer-events: none;
 }
 
-/* Препятствия */
+/* Obstacles */
 .obstacle {
     position: absolute;
     border-radius: 6px;
@@ -120,7 +120,7 @@ li {
     z-index: 5;
 }
 
-/* Ресурсы (маленькие круги: золото, аптечки и т.п.) */
+/* Resources (small circles: gold, medkits, etc.) */
 .resource {
     position: absolute;
     border-radius: 50%;
@@ -143,7 +143,7 @@ li {
     border-color: #27ae60;
 }
 
-/* Проектайлы */
+/* Projectiles */
 .projectile {
     position: absolute;
     border-radius: 50%;
@@ -322,7 +322,7 @@ li {
     to   { transform: translate3d(2px, 1px, 0); }
 }
 
-/* === ЧАТ === */
+/* === CHAT === */
 #chat-panel {
     width: 100%;
     height: 180px;
@@ -381,7 +381,7 @@ li {
     background: #e67e22;
 }
 
-/* ==================== БОКОВАЯ ТАБЛИЦА (НОВОЕ РЕШЕНИЕ) ==================== */
+/* ==================== SIDEBOARD (NEW SOLUTION) ==================== */
 #game-wrapper {
     display: flex;
     gap: 16px;
@@ -493,10 +493,10 @@ li {
     font-size: 11px;
 }
 
-/* Скрываем старый #leaderboard (если остался) */
+/* Hide the old #leaderboard (if it still exists */
 #leaderboard { display: none !important; }
 
-/* ==================== ТАЙМЕР В ПРАВОМ ВЕРХНЕМ УГЛУ ==================== */
+/* ==================== TIMER IN THE TOP RIGHT CORNER ==================== */
 #hud {
     position: absolute;
     top: 16px;
@@ -515,7 +515,7 @@ li {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
-/* ==================== ПРАВАЯ КОЛОНКА (ТАБЛИЦА + ЧАТ) ==================== */
+/* ==================== RIGHT PANEL (LEADERBOARD + CHAT) ==================== */
 #right-panel {
     display: flex;
     flex-direction: column;
@@ -534,7 +534,7 @@ li {
     overflow: hidden;
 }
 
-/* === ЧАТ ПОД ТАБЛИЦЕЙ === */
+/* === CHAT UNDER THE LEADERBOARD === */
 #chat-panel {
     width: 100%;
     height: 180px;
