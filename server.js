@@ -227,7 +227,7 @@ function checkCollisions() {
 
 // ==================== SOCKET.IO ====================
 io.on('connection', (socket) => {
-    console.log(`Подключение: ${socket.id}`);
+    console.log(`Connection: ${socket.id}`);
 
     socket.on('join_game', (username) => {
         if (gameInProgress) return socket.emit('join_error', 'Игра уже началась!');
@@ -367,7 +367,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-        console.log(`Отключение: ${socket.id}`);
+        console.log(`Disconnection: ${socket.id}`);
         if (players[socket.id]) {
             const leaverName = players[socket.id].name;
             const wasLeader = players[socket.id].isLeader;
@@ -453,5 +453,5 @@ function endGame() {
 }
 
 server.listen(PORT, () => {
-    console.log(`Сервер запущен на http://localhost:${PORT}`);
+    console.log(`server listening on http://localhost:${PORT}`);
 });
