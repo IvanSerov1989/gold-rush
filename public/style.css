@@ -381,122 +381,228 @@ li {
     background: #e67e22;
 }
 
-/* ==================== SIDEBOARD (NEW SOLUTION) ==================== */
+/* ==================== SIDEBOARD (NEW UI DESIGN) ==================== */
 #game-wrapper {
     display: flex;
     gap: 16px;
     align-items: flex-start;
 }
 
+#right-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 280px; /* Чуть шире, чтобы влез красивый UI */
+    height: 600px; /* Выравниваем по высоте игрового поля */
+}
+
 #leaderboard-sidebar {
-    width: 210px;
-    height: 600px;
-    background: #1f2b35;
-    border: 3px solid #34495e;
+    background: #242d38;
     border-radius: 12px;
-    box-shadow: 0 10px 35px rgba(0,0,0,0.5);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    height: fit-content;
+    flex-shrink: 0; /* Запрещаем чату сжимать таблицу, если не хватает места */
 }
 
-.leaderboard-header {
-    background: #2c3e50;
-    padding: 14px 16px;
+#chat-panel {
+    flex: 1; /* Чат занимает оставшееся место (около 264px) */
+    border: none; /* Убираем старую границу */
+}
+
+/* Заголовки панелей */
+.leaderboard-header, .chat-header {
+    padding: 16px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    border-bottom: 1px solid #34495e;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.leaderboard-header h3 {
+.leaderboard-header h3, .chat-header h3 {
     margin: 0;
-    font-size: 15px;
+    font-size: 14px;
     text-transform: uppercase;
-    letter-spacing: 1.5px;
-    color: #f1c40f;
+    font-weight: 700;
+    color: #f1c40f; /* Желтый акцент */
+    letter-spacing: 0.5px;
 }
 
 .player-count-badge {
-    background: #34495e;
+    background: rgba(241, 196, 15, 0.1);
     color: #f1c40f;
-    font-size: 12px;
+    border: 1px solid rgba(241, 196, 15, 0.3);
+    font-size: 11px;
     font-weight: 700;
-    padding: 3px 9px;
-    border-radius: 999px;
+    padding: 4px 10px;
+    border-radius: 12px;
 }
 
 #score-list {
-    flex: 1;
     margin: 0;
-    padding: 8px 12px;
-    overflow-y: auto;
-    font-size: 14px;
+    padding: 12px;
+    overflow: hidden; 
+    list-style: none;
+    max-height: none !important; 
 }
 
 #score-list li {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 9px 10px;
-    margin: 5px 0;
-    background: #2c3e50;
+    gap: 12px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    background: #1b222b;
     border-radius: 8px;
-    font-weight: 600;
+    border: 2px solid transparent;
 }
 
+/* Выделение себя */
 #score-list li.me-score {
-    background: #3d5a73;
-    border: 2px solid #f39c12;
+    border-color: #f1c40f;
+    box-shadow: 0 0 12px rgba(241, 196, 15, 0.15);
+    background: #222b36;
 }
 
 #score-list li .rank {
-    font-size: 13px;
-    font-weight: 800;
-    width: 22px;
-    text-align: center;
-    color: #f1c40f;
-}
-
-#score-list li .color-dot {
-    width: 14px;
-    height: 14px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
-    border: 2px solid #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.3);
     flex-shrink: 0;
 }
 
 #score-list li .player-name {
     flex: 1;
-    font-size: 13.5px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #ecf0f1;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    position: static; 
+    transform: none;
 }
 
 #score-list li .score {
     font-weight: 800;
-    color: #f1c40f;
-    font-size: 15px;
-    min-width: 38px;
+    font-size: 16px;
     text-align: right;
 }
 
+#score-list li .score .pts {
+    font-size: 11px;
+    color: #7f8c8d;
+    font-weight: 500;
+    margin-left: 2px;
+}
+
 .leaderboard-footer {
-    padding: 10px 14px;
-    background: #2c3e50;
+    padding: 12px;
     text-align: center;
-    border-top: 1px solid #34495e;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 .leaderboard-footer small {
     color: #7f8c8d;
-    font-size: 11px;
+    font-size: 12px;
+    font-weight: 500;
 }
 
-/* Hide the old #leaderboard (if it still exists */
-#leaderboard { display: none !important; }
+/* ==================== CHAT UI ==================== */
+#chat-messages {
+    flex: 1;
+    padding: 12px;
+    margin: 0 12px;
+    background: #0d131a; /* Глубокий темный фон для поля сообщений */
+    border-radius: 8px;
+    overflow-y: auto;
+    position: relative;
+    font-size: 13px;
+    color: #e0e0e0;
+}
 
-/* ==================== TIMER IN THE TOP RIGHT CORNER ==================== */
+.chat-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #4b5a6c;
+    font-size: 12px;
+    text-align: center;
+    padding: 20px;
+    pointer-events: none;
+}
+
+#chat-messages .chat-line {
+    margin-bottom: 8px;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+#chat-messages .chat-name {
+    font-weight: 700;
+    color: #f1c40f;
+}
+
+#chat-input-area {
+    display: flex;
+    padding: 12px;
+    gap: 8px;
+    border-top: none; /* Убрали старую границу */
+}
+
+#chat-input {
+    flex: 1;
+    background: #1b222b;
+    border: 1px solid rgba(255,255,255,0.1);
+    padding: 10px 14px;
+    border-radius: 20px;
+    color: #fff;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+#chat-input:focus {
+    border-color: #f1c40f;
+}
+
+#chat-send-btn {
+    background: #f1c40f;
+    border: none;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.1s, background 0.2s;
+    padding: 0;
+    flex-shrink: 0;
+}
+
+#chat-send-btn:hover {
+    background: #f39c12;
+    transform: scale(1.05); /* Легкий эффект нажатия */
+}
+
+#chat-send-btn svg {
+    margin-left: -2px; /* Чуть центрируем иконку самолетика */
+    margin-top: 2px;
+}
+
+/* ==================== TIMER ==================== */
 #hud {
     position: absolute;
     top: 16px;
@@ -515,25 +621,4 @@ li {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
-/* ==================== RIGHT PANEL (LEADERBOARD + CHAT) ==================== */
-#right-panel {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    width: 210px;
-}
-
-/* === CHAT UNDER THE LEADERBOARD === */
-#chat-panel {
-    width: 100%;
-    height: 180px;
-    background: rgba(0, 0, 0, 0.65);
-    border: 2px solid #34495e;
-    border-radius: 10px;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.4);
-}
-=======
->>>>>>> 3213766 (change style 29.05)
+#leaderboard { display: none !important; }

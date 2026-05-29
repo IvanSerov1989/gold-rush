@@ -50,28 +50,33 @@
               <div id="notification-toast" class="notification-toast" style="display: none;"></div>
           </div>
 
-          <!-- RIGHT COLUMN: LEADERBOARD + CHAT -->
-          <div id="right-panel">
-              <!-- Leaderboard -->
-              <div id="leaderboard-sidebar">
-                  <div class="leaderboard-header">
-                      <h3>Leaderboard</h3>
-                      <div class="player-count-badge"><span id="sidebar-player-count">0</span>/4</div>
-                  </div>
-                  <ul id="score-list"></ul>
-                  <div class="leaderboard-footer">
-                      <small>Collect gold and power-ups!</small>
-                  </div>
-              </div>
+            <div id="right-panel">
+                <div id="leaderboard-sidebar">
+                    <div class="leaderboard-header">
+                        <h3>🏆 ТАБЛИЦА ЛИДЕРОВ</h3>
+                        <div class="player-count-badge"><span id="sidebar-player-count">0</span>/4</div>
+                    </div>
+                    <ul id="score-list"></ul>
+                    <div class="leaderboard-footer">
+                        <small>Собирай золото и power-up'ы!</small>
+                    </div>
+                </div>
 
-              <!-- Chat under leaderboard -->
-              <div id="chat-panel">
-                  <div id="chat-messages"></div>
-                  <div id="chat-input-area">
-                      <input type="text" id="chat-input" placeholder="Type a message..." maxlength="80">
-                      <button id="chat-send-btn">Send</button>
+                <div id="chat-panel">
+                  <div class="chat-header">
+                      <h3>💬 ЧАТ КОМАНДЫ</h3>
                   </div>
-              </div>
+                  <div id="chat-messages">
+                      <div class="chat-placeholder">Здесь будут сообщения игроков...</div>
+                  </div>
+                  <div id="chat-input-area">
+                      <input type="text" id="chat-input" placeholder="Напиши сообщение..." maxlength="80">
+                      <button id="chat-send-btn">
+                          <svg viewBox="0 0 24 24" width="20" height="20" stroke="#000" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                      </button>
+                  </div>
+                </div>
+            </div>
           </div>
       </div>
     </div>

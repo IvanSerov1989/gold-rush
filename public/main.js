@@ -364,17 +364,18 @@ function updateHud(state) {
     scoreList.innerHTML = '';
     entries.forEach((player, index) => {
       const item = document.createElement('li');
-      item.innerHTML = `
-          <span class="rank">${index + 1}</span>
-          <span class="color-dot" style="background-color: ${player.color}"></span>
-          <span class="player-name">${player.name}</span>
-          <span class="score">${player.score}</span>
-      `;
+      // Добавляем класс для выделения себя
       if (player.id === socket.id) item.className = 'me-score';
+
+      // Генерируем HTML, вставляя цвет игрока в background ранга и цвет текста очков
+      item.innerHTML = `
+          <span class="rank" style="background-color: ${player.color}">${index + 1}</span>
+          <span class="player-name">${player.name}</span>
+          <span class="score" style="color: ${player.color}">${player.score} <span class="pts">pts</span></span>
+      `;
       scoreList.appendChild(item);
     });
 
-    // Update the player count in the sidebar
     if (sidebarPlayerCount) sidebarPlayerCount.textContent = entries.length;
 }
 
@@ -411,6 +412,11 @@ function sendChatMessage() {
 
 function addChatMessage(name, message, isMe = false) {
     const container = document.getElementById('chat-messages');
+    
+    // Удаляем заглушку, если она еще там
+    const placeholder = container.querySelector('.chat-placeholder');
+    if (placeholder) placeholder.remove();
+
     const line = document.createElement('div');
     line.className = 'chat-line';
     line.innerHTML = `<span class="chat-name">${name}:</span> ${message}`;
