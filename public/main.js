@@ -110,6 +110,7 @@ let menuOpen = false;
 let gamePaused = false;
 let gameStartTime = 0;
 let chatOpen = true;
+let lastLeaderboardHTML = "";
 
 document.addEventListener('click', () => {
     if (!audioContext) initAudio();
@@ -141,20 +142,31 @@ function sendInput() {
 // ==================== SOCKET EVENTS ====================
 socket.on('game_state_update', (state) => {
     const now = performance.now();
+    const TICK_RATE = 1000 / 30; // Ожидаемое время между пакетами (~33.3ms)
+
     if (state.players) {
         Object.keys(state.players).forEach(id => {
             const p = state.players[id];
             const prev = playerRenderData[id];
-            if (prev && prev.nextTime) {
+            
+            if (prev && prev.targetTime) {
                 playerRenderData[id] = {
                     ...prev,
-                    prevX: prev.nextX, prevY: prev.nextY, prevTime: prev.nextTime,
-                    nextX: p.x, nextY: p.y, nextTime: now, ...p
+                    prevX: prev.nextX, 
+                    prevY: prev.nextY, 
+                    startTime: now, // Начинаем движение прямо сейчас
+                    nextX: p.x, 
+                    nextY: p.y, 
+                    targetTime: now + TICK_RATE, // Должны прибыть через 33.3 мс
+                    ...p
                 };
             } else {
+                // Первый кадр (когда игрок только появился)
                 playerRenderData[id] = {
-                    prevX: p.x, prevY: p.y, nextX: p.x, nextY: p.y,
-                    prevTime: now - 33, nextTime: now, ...p
+                    prevX: p.x, prevY: p.y, 
+                    nextX: p.x, nextY: p.y,
+                    startTime: now, targetTime: now + TICK_RATE, 
+                    ...p
                 };
             }
         });
@@ -167,9 +179,19 @@ socket.on('game_paused', ({ by, paused }) => {
     gamePaused = paused;
     menuStatus.textContent = paused ? `Pause: ${by}` : 'Game is running';
     showNotification(paused ? `${by} paused the game` : `${by} resumed the game`);
-    if (paused && !menuOpen) {
-        inGameMenu.style.display = 'flex';
-        menuOpen = true;
+    
+    if (paused) {
+        // Если игра на паузе, показываем меню всем
+        if (!menuOpen) {
+            inGameMenu.style.display = 'flex';
+            menuOpen = true;
+        }
+    } else {
+        // Если игра возобновлена, ПРЯЧЕМ меню у всех
+        if (menuOpen) {
+            inGameMenu.style.display = 'none';
+            menuOpen = false;
+        }
     }
 });
 
@@ -229,24 +251,20 @@ function startClientGameLoop() {
             const renderInfo = playerRenderData[id];
             let x = p.x, y = p.y;
 
-            // If the player is stunned, do NOT interpolate (to prevent teleporting).
+            // Если игрок оглушен, не интерполируем
             if (renderInfo && p.stunTime <= 0) {
-                const interval = Math.max(16, renderInfo.nextTime - renderInfo.prevTime);
-                let t = (now - renderInfo.prevTime) / interval;
-                t = Math.min(1, Math.max(0, t));
+                const duration = renderInfo.targetTime - renderInfo.startTime;
+                
+                // Рассчитываем прогресс (от 0 до 1)
+                let t = (now - renderInfo.startTime) / duration;
+                t = Math.min(1, Math.max(0, t)); // Жестко ограничиваем t в пределах 0..1
 
-                const targetX = renderInfo.prevX + (renderInfo.nextX - renderInfo.prevX) * t;
-                const targetY = renderInfo.prevY + (renderInfo.nextY - renderInfo.prevY) * t;
-
-                const predictionTime = 0.05;
-                const predictedX = targetX + (renderInfo.vx || 0) * predictionTime;
-                const predictedY = targetY + (renderInfo.vy || 0) * predictionTime;
-
-                x = targetX * 0.75 + predictedX * 0.25;
-                y = targetY * 0.75 + predictedY * 0.25;
+                // Плавный переход от старой точки к новой
+                x = renderInfo.prevX + (renderInfo.nextX - renderInfo.prevX) * t;
+                y = renderInfo.prevY + (renderInfo.nextY - renderInfo.prevY) * t;
             } else {
-              x = p.x;
-              y = p.y;
+                x = p.x;
+                y = p.y;
             }
 
             const el = playerElements[id];
@@ -259,19 +277,20 @@ function startClientGameLoop() {
         // === OBSTACLES ===
         if (currentGameState.obstacles) {
             currentGameState.obstacles.forEach(obs => {
+                // Трогаем DOM только если элемента еще нет
                 if (!obstacleElements[obs.id]) {
                     const d = document.createElement('div');
                     d.className = 'obstacle';
                     d.style.backgroundColor = obs.color || '#7f8c8d';
+                    const w = obs.width || 40;
+                    const h = obs.height || 40;
+                    d.style.width = `${w}px`;
+                    d.style.height = `${h}px`;
+                    d.style.transform = `translate3d(${obs.x - w/2}px, ${obs.y - h/2}px, 0)`;
+                    
                     gameBoard.appendChild(d);
                     obstacleElements[obs.id] = d;
                 }
-                const el = obstacleElements[obs.id];
-                const w = obs.width || 40;
-                const h = obs.height || 40;
-                el.style.width = `${w}px`;
-                el.style.height = `${h}px`;
-                el.style.transform = `translate3d(${obs.x - w/2}px, ${obs.y - h/2}px, 0)`;
             });
         }
 
@@ -280,21 +299,24 @@ function startClientGameLoop() {
             const activeIds = new Set(currentGameState.resources.map(r => r.id));
 
             currentGameState.resources.forEach(res => {
+                // Задаем координаты и размеры ТОЛЬКО при спавне монетки
                 if (!resourceElements[res.id]) {
                     const d = document.createElement('div');
                     d.className = `resource resource-${res.type}`;
                     d.title = res.type === 'gold' ? 'Gold' : res.type === 'speed' ? 'Speed' : 'Shield';
+                    
+                    const size = res.size || 14;
+                    d.style.width = `${size}px`;
+                    d.style.height = `${size}px`;
+                    d.style.backgroundColor = res.color || '#f1c40f';
+                    d.style.transform = `translate3d(${res.x - size/2}px, ${res.y - size/2}px, 0)`;
+                    
                     gameBoard.appendChild(d);
                     resourceElements[res.id] = d;
                 }
-                const el = resourceElements[res.id];
-                const size = res.size || 14;
-                el.style.width = `${size}px`;
-                el.style.height = `${size}px`;
-                el.style.backgroundColor = res.color || '#f1c40f';
-                el.style.transform = `translate3d(${res.x - size/2}px, ${res.y - size/2}px, 0)`;
             });
 
+            // Удаление собранных ресурсов остается без изменений
             Object.keys(resourceElements).forEach(id => {
                 if (!activeIds.has(id)) {
                     resourceElements[id].remove();
@@ -356,27 +378,35 @@ function formatTime(seconds) {
 function updateHud(state) {
     if (!state || !state.players) return;
 
+    // Таймер обновляем без проблем, текстовые ноды легкие
     timerDisplay.textContent = formatTime(state.timer || 0);
 
     const entries = Object.values(state.players)
         .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
 
-    scoreList.innerHTML = '';
+    // Собираем новый HTML в строку (в памяти, не трогая DOM)
+    let newHTML = "";
     entries.forEach((player, index) => {
-      const item = document.createElement('li');
-      // Добавляем класс для выделения себя
-      if (player.id === socket.id) item.className = 'me-score';
-
-      // Генерируем HTML, вставляя цвет игрока в background ранга и цвет текста очков
-      item.innerHTML = `
-          <span class="rank" style="background-color: ${player.color}">${index + 1}</span>
-          <span class="player-name">${player.name}</span>
-          <span class="score" style="color: ${player.color}">${player.score} <span class="pts">pts</span></span>
-      `;
-      scoreList.appendChild(item);
+        const isMeClass = player.id === socket.id ? 'class="me-score"' : '';
+        newHTML += `
+            <li ${isMeClass}>
+                <span class="rank" style="background-color: ${player.color}">${index + 1}</span>
+                <span class="player-name">${player.name}</span>
+                <span class="score" style="color: ${player.color}">${player.score} <span class="pts">pts</span></span>
+            </li>
+        `;
     });
 
-    if (sidebarPlayerCount) sidebarPlayerCount.textContent = entries.length;
+    // ТРОГАЕМ DOM ТОЛЬКО ЕСЛИ ТАБЛИЦА РЕАЛЬНО ИЗМЕНИЛАСЬ
+    if (lastLeaderboardHTML !== newHTML) {
+        scoreList.innerHTML = newHTML;
+        lastLeaderboardHTML = newHTML;
+    }
+
+    // Обновляем счетчик игроков только если он изменился
+    if (sidebarPlayerCount && sidebarPlayerCount.textContent !== entries.length.toString()) {
+        sidebarPlayerCount.textContent = entries.length;
+    }
 }
 
 function showGameOver(state) {
@@ -428,7 +458,12 @@ function addChatMessage(name, message, isMe = false) {
 // ==================== BUTTONS ====================
 restartBtn.addEventListener('click', () => window.location.reload());
 menuResumeBtn.addEventListener('click', () => toggleMenu(false));
-menuLeaveBtn.addEventListener('click', () => socket.emit('leave_game'));
+menuLeaveBtn.addEventListener('click', () => {
+    socket.emit('leave_game');
+    setTimeout(() => {
+        window.location.reload(); 
+    }, 100);
+});
 
 // Chat
 document.getElementById('chat-send-btn').addEventListener('click', sendChatMessage);

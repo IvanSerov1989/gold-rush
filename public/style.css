@@ -32,6 +32,8 @@ h1 {
     border-radius: 8px;
     position: relative; /* Important for absolute positioning of objects inside*/
     box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    transform: translateZ(0); 
+    will-change: transform;
 }
 
 #join-screen, #lobby-screen {
