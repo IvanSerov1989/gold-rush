@@ -394,8 +394,8 @@ li {
     display: flex;
     flex-direction: column;
     gap: 16px;
-    width: 280px; /* Чуть шире, чтобы влез красивый UI */
-    height: 600px; /* Выравниваем по высоте игрового поля */
+    width: 280px; /* a little wider to fit the nice UI */
+    height: 600px; /* Align by height of the game field */
 }
 
 #leaderboard-sidebar {
@@ -406,15 +406,15 @@ li {
     flex-direction: column;
     overflow: hidden;
     height: fit-content;
-    flex-shrink: 0; /* Запрещаем чату сжимать таблицу, если не хватает места */
+    flex-shrink: 0; /* Prevent chat from compressing the table if there is not enough space */
 }
 
 #chat-panel {
-    flex: 1; /* Чат занимает оставшееся место (около 264px) */
-    border: none; /* Убираем старую границу */
+    flex: 1; /* Chat takes up the remaining space (around 264px) */
+    border: none; /* Remove the old border */
 }
 
-/* Заголовки панелей */
+/* Header styles for both leaderboard and chat */
 .leaderboard-header, .chat-header {
     padding: 16px;
     display: flex;
@@ -428,7 +428,7 @@ li {
     font-size: 14px;
     text-transform: uppercase;
     font-weight: 700;
-    color: #f1c40f; /* Желтый акцент */
+    color: #f1c40f; /* Yellow accent */
     letter-spacing: 0.5px;
 }
 
@@ -524,7 +524,7 @@ li {
     flex: 1;
     padding: 12px;
     margin: 0 12px;
-    background: #0d131a; /* Глубокий темный фон для поля сообщений */
+    background: #0d131a; /* Deep dark background for the message area */
     border-radius: 8px;
     overflow-y: auto;
     position: relative;
@@ -560,7 +560,7 @@ li {
     display: flex;
     padding: 12px;
     gap: 8px;
-    border-top: none; /* Убрали старую границу */
+    border-top: none; /* Remove the old border */
 }
 
 #chat-input {
@@ -596,11 +596,11 @@ li {
 
 #chat-send-btn:hover {
     background: #f39c12;
-    transform: scale(1.05); /* Легкий эффект нажатия */
+    transform: scale(1.05); /* Light touch effect */
 }
 
 #chat-send-btn svg {
-    margin-left: -2px; /* Чуть центрируем иконку самолетика */
+    margin-left: -2px; /* Slightly center the airplane icon */
     margin-top: 2px;
 }
 

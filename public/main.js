@@ -142,7 +142,7 @@ function sendInput() {
 // ==================== SOCKET EVENTS ====================
 socket.on('game_state_update', (state) => {
     const now = performance.now();
-    const TICK_RATE = 1000 / 30; // Ожидаемое время между пакетами (~33.3ms)
+    const TICK_RATE = 1000 / 30; // Expected time between packets (~33.3ms)
 
     if (state.players) {
         Object.keys(state.players).forEach(id => {
@@ -154,14 +154,14 @@ socket.on('game_state_update', (state) => {
                     ...prev,
                     prevX: prev.nextX, 
                     prevY: prev.nextY, 
-                    startTime: now, // Начинаем движение прямо сейчас
+                    startTime: now, // start new interpolation from now
                     nextX: p.x, 
                     nextY: p.y, 
-                    targetTime: now + TICK_RATE, // Должны прибыть через 33.3 мс
+                    targetTime: now + TICK_RATE, // Expected to arrive in 33.3 ms
                     ...p
                 };
             } else {
-                // Первый кадр (когда игрок только появился)
+                // first time seeing this player, no interpolation yet
                 playerRenderData[id] = {
                     prevX: p.x, prevY: p.y, 
                     nextX: p.x, nextY: p.y,
@@ -181,13 +181,13 @@ socket.on('game_paused', ({ by, paused }) => {
     showNotification(paused ? `${by} paused the game` : `${by} resumed the game`);
     
     if (paused) {
-        // Если игра на паузе, показываем меню всем
+        // if the game is paused, SHOW menu to everyone (including the one who paused)
         if (!menuOpen) {
             inGameMenu.style.display = 'flex';
             menuOpen = true;
         }
     } else {
-        // Если игра возобновлена, ПРЯЧЕМ меню у всех
+        // if the game is resumed, HIDE menu from everyone
         if (menuOpen) {
             inGameMenu.style.display = 'none';
             menuOpen = false;
@@ -251,15 +251,15 @@ function startClientGameLoop() {
             const renderInfo = playerRenderData[id];
             let x = p.x, y = p.y;
 
-            // Если игрок оглушен, не интерполируем
+            // if player is stunned, we want to freeze them at the last position until stun wears off
             if (renderInfo && p.stunTime <= 0) {
                 const duration = renderInfo.targetTime - renderInfo.startTime;
                 
-                // Рассчитываем прогресс (от 0 до 1)
+                // Calculate progress (from 0 to 1)
                 let t = (now - renderInfo.startTime) / duration;
-                t = Math.min(1, Math.max(0, t)); // Жестко ограничиваем t в пределах 0..1
+                t = Math.min(1, Math.max(0, t)); // Hard limit t to 0..1
 
-                // Плавный переход от старой точки к новой
+                // Smooth transition from old position to new
                 x = renderInfo.prevX + (renderInfo.nextX - renderInfo.prevX) * t;
                 y = renderInfo.prevY + (renderInfo.nextY - renderInfo.prevY) * t;
             } else {
@@ -277,7 +277,7 @@ function startClientGameLoop() {
         // === OBSTACLES ===
         if (currentGameState.obstacles) {
             currentGameState.obstacles.forEach(obs => {
-                // Трогаем DOM только если элемента еще нет
+                // DOM is only created once per obstacle, since they don't move or change
                 if (!obstacleElements[obs.id]) {
                     const d = document.createElement('div');
                     d.className = 'obstacle';
@@ -299,7 +299,7 @@ function startClientGameLoop() {
             const activeIds = new Set(currentGameState.resources.map(r => r.id));
 
             currentGameState.resources.forEach(res => {
-                // Задаем координаты и размеры ТОЛЬКО при спавне монетки
+                // set the coordinates and dimensions ONLY when the coin spawns.
                 if (!resourceElements[res.id]) {
                     const d = document.createElement('div');
                     d.className = `resource resource-${res.type}`;
@@ -316,7 +316,7 @@ function startClientGameLoop() {
                 }
             });
 
-            // Удаление собранных ресурсов остается без изменений
+            // remove coins that are no longer in the game state (collected or expired)
             Object.keys(resourceElements).forEach(id => {
                 if (!activeIds.has(id)) {
                     resourceElements[id].remove();
@@ -378,7 +378,7 @@ function formatTime(seconds) {
 function updateHud(state) {
     if (!state || !state.players) return;
 
-    // Таймер обновляем без проблем, текстовые ноды легкие
+    // We update the timer without any problems, the text nodes are lightweight
     timerDisplay.textContent = formatTime(state.timer || 0);
 
     const entries = Object.values(state.players)
@@ -397,13 +397,13 @@ function updateHud(state) {
         `;
     });
 
-    // ТРОГАЕМ DOM ТОЛЬКО ЕСЛИ ТАБЛИЦА РЕАЛЬНО ИЗМЕНИЛАСЬ
+    // touch the DOM only if the HTML has actually changed (to minimize reflows)
     if (lastLeaderboardHTML !== newHTML) {
         scoreList.innerHTML = newHTML;
         lastLeaderboardHTML = newHTML;
     }
 
-    // Обновляем счетчик игроков только если он изменился
+    // Update sidebar player count, but only if it has changed (to avoid unnecessary DOM updates)
     if (sidebarPlayerCount && sidebarPlayerCount.textContent !== entries.length.toString()) {
         sidebarPlayerCount.textContent = entries.length;
     }
