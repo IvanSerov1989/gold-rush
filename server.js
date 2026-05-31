@@ -280,7 +280,7 @@ io.on('connection', (socket) => {
 
         for (let i = 0; i < 6; i++) spawnResource();
 
-        io.emit('game_started');
+        io.emit('game_started', { obstacles: OBSTACLES });
         startGameLoop();
     });
 
@@ -309,8 +309,6 @@ io.on('connection', (socket) => {
             dx = (dx / len) * MOVE_SPEED * speedMultiplier;
             dy = (dy / len) * MOVE_SPEED * speedMultiplier;
 
-            player.x += dx;
-            player.y += dy;
             player.vx = dx;
             player.vy = dy;
 
@@ -403,7 +401,6 @@ function getDeltaState() {
     if (!gameState.gameRunning) return null;
     return {
         players: gameState.players,
-        obstacles: gameState.obstacles,
         resources: gameState.resources,
         timer: gameState.timer,
         paused: gameState.paused || false
@@ -417,23 +414,38 @@ function startGameLoop() {
     gameInterval = setInterval(() => {
         if (!gameState.gameRunning) return;
 
-        checkCollisions();
-
-        const delta = getDeltaState();
-        Object.values(gameState.players || {}).forEach(p => clampPlayerPosition(p));
-
-        if (delta) io.emit('game_state_update', delta);
-
         if (!gameState.paused) {
+            // 1. Двигаем игроков и обновляем таймеры баффов/станов
             Object.values(gameState.players || {}).forEach(player => {
+                // ВОЗВРАЩАЕМ УМЕНЬШЕНИЕ ТАЙМЕРОВ (иначе стан и ускорение будут вечными)
                 player.speedBoostTime = Math.max(0, (player.speedBoostTime || 0) - 1);
                 player.shieldTime = Math.max(0, (player.shieldTime || 0) - 1);
                 player.stunTime = Math.max(0, (player.stunTime || 0) - 1);
+
+                // Если игрок не оглушен — применяем вектор скорости
+                if (player.stunTime <= 0) {
+                    const speedMultiplier = player.speedBoostTime > 0 ? 1.65 : 1;
+                    player.x += (player.vx || 0) * speedMultiplier;
+                    player.y += (player.vy || 0) * speedMultiplier;
+                    clampPlayerPosition(player);
+                }
             });
 
+            // 2. Просчитываем столкновения на основе новых позиций
+            checkCollisions();
+
+            // 3. Обновляем таймер игры
             gameState.timer -= 1 / 30;
-            if (gameState.timer <= 0) endGame();
+            if (gameState.timer <= 0) {
+                endGame();
+                return; // Прерываем выполнение, игра окончена
+            }
         }
+
+        // 4. Отправляем готовый кадр всем клиентам
+        const delta = getDeltaState();
+        if (delta) io.emit('game_state_update', delta);
+
     }, 1000 / 30);
 
     resourceSpawnInterval = setInterval(() => {

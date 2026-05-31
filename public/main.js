@@ -122,21 +122,25 @@ window.addEventListener('keydown', (e) => { keys[e.key.toLowerCase()] = true; })
 window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
 
 let lastInputTime = 0;
+let lastSentInput = JSON.stringify({ up: false, down: false, left: false, right: false });
+
 function sendInput() {
     if (!currentGameState || !myPlayerInfo || currentGameState.paused) return;
-    const now = Date.now();
-    if (now - lastInputTime < 16) return;
-
+    
     const input = {
-        up: keys['w'] || keys['arrowup'],
-        down: keys['s'] || keys['arrowdown'],
-        left: keys['a'] || keys['arrowleft'],
-        right: keys['d'] || keys['arrowright']
+        up: Boolean(keys['w'] || keys['arrowup']),
+        down: Boolean(keys['s'] || keys['arrowdown']),
+        left: Boolean(keys['a'] || keys['arrowleft']),
+        right: Boolean(keys['d'] || keys['arrowright'])
     };
-    if (input.up || input.down || input.left || input.right) {
+    
+    const inputString = JSON.stringify(input);
+    
+    // Отправляем данные на сервер ТОЛЬКО если состояние клавиш изменилось
+    if (inputString !== lastSentInput) {
         socket.emit('player_input', input);
+        lastSentInput = inputString;
     }
-    lastInputTime = now;
 }
 
 // ==================== SOCKET EVENTS ====================
@@ -171,6 +175,11 @@ socket.on('game_state_update', (state) => {
             }
         });
     }
+
+    // === ФИКС ПРЕПЯТСТВИЙ ===
+    // Берем препятствия из предыдущего состояния, так как сервер их больше не присылает каждый тик
+    state.obstacles = currentGameState && currentGameState.obstacles ? currentGameState.obstacles : [];
+
     currentGameState = state;
     updateHud(state);
 });
@@ -532,13 +541,16 @@ socket.on('update_lobby', (players) => {
 });
 
 // ==================== GAME STARTED ====================
-socket.on('game_started', () => {
+socket.on('game_started', (data) => {
     lobbyScreen.style.display = 'none';
     gameWrapper.style.display = 'flex';
     inGameMenu.style.display = 'none';
     menuOpen = false;
     gamePaused = false;
     if (pauseOverlay) pauseOverlay.style.display = 'none';
+
+    // === СОХРАНЯЕМ ПРЕПЯТСТВИЯ ПРИ СТАРТЕ ===
+    currentGameState = { obstacles: data ? data.obstacles : [] };
 
     startClientGameLoop();
     playSound('start');
